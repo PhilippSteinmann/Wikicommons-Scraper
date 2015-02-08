@@ -4,8 +4,6 @@ import random
 
 queue1 = Queue.Queue()
 queue2 = Queue.Queue()
-for i in range(5):
-    queue1.put(random.randint(1,10))
 
 class ThreadOne(threading.Thread):
     def __init__(self, queue1, queue2):
@@ -25,6 +23,8 @@ for i in range(5):
     thread.setDaemon(True)
     thread.start()
 
+for i in range(5):
+    queue1.put(random.randint(1,10))
 queue1.join()
 
 print "done"
