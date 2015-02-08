@@ -1,5 +1,4 @@
-# Mostly copied from
-# http://www.ibm.com/developerworks/aix/library/au-threadingpython/
+# Adapted from http://www.ibm.com/developerworks/aix/library/au-threadingpython/
 import Queue
 import threading
 import urllib2
@@ -103,7 +102,7 @@ def main():
 
     # Needed to convert dictionary -> CSV
     csv_writer = csv.DictWriter(file_obj, csv_fields)
-    csv_writer.write_header()
+    csv_writer.writeheader()
 
     # Spawn a pool of threads, and pass them queue instance
     for i in range(5):
