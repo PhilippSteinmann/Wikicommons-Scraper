@@ -1,0 +1,2 @@
+Made to scrape paintings & metadata from http://commons.wikimedia.org/wiki/Category:Paintings
+module bs4 is required
