@@ -5,9 +5,10 @@ import urllib2
 import urllib
 import time
 import csv
+import sys
 from bs4 import BeautifulSoup
 
-NUM_CATEGORY_THREADS = 15
+NUM_CATEGORY_THREADS = 5
 
 
 # This thread takes category_urls from category_url_queue and fetches & parses them
@@ -27,25 +28,31 @@ class FetchCategory(threading.Thread):
 
     # Parse page
     def findPaintings(self, soup):
-        return ()
+        painting_links = soup.select(".gallery.mw-gallery-traditional a.image")
+        links = [self.base_url + link["href"] for link in painting_links]
+        return links
 
     def run(self):
         while True:
             # Pop from queue
             category_url = self.category_url_queue.get()
+            print category_url
             #print category_url + "\n"
             html = urllib2.urlopen(category_url).read()
             self.category_url_queue.task_done()
-
+            print 1
             soup = BeautifulSoup(html)
+            print soup
+            print html
+            print 1.5
             categories_in_page = self.findOtherCategories(soup)
+            print 2
             paintings_in_page = self.findPaintings(soup)
-
             # Put categories in page in categories queue
             for category in categories_in_page:
                 self.category_url_queue.put(category)
-                self.painting_url_queue.put(category)
 
+            print "putting in paintings"
             # Put paintings in page in paintings queue
             for painting in paintings_in_page:
                 self.painting_url_queue.put(painting)
@@ -63,7 +70,7 @@ class FetchPainting(threading.Thread):
         self.file_urls_retrieved = file_urls_retrieved
 
     def readMetaData(self, html):
-        return false
+        return False
 
     def generateFileName(self, file_url):
         pass
@@ -72,6 +79,7 @@ class FetchPainting(threading.Thread):
         while True:
             # Pop from queue
             painting_url = self.painting_url_queue.get()
+            print painting_url + "\n"
             html = urllib2.urlopen(painting_url).read()
 
             # Read metadata from HTML
@@ -115,7 +123,9 @@ def removeDuplicates(queue):
 
 def main():
     # URL to start out with
-    initial_url = "http://commons.wikimedia.org/wiki/Category:1573_paintings"
+    initial_url = "http://commons.wikimedia.org/wiki/Category:1380_paintings"
+    if len(sys.argv) > 1:
+        initial_url = sys.argv[1]
 
     # A queue containing category pages to be scraped
     category_url_queue = Queue.Queue()
@@ -139,30 +149,27 @@ def main():
     category_url_queue.join()
     painting_url_queue.join()
 
-    while True:
-        print painting_url_queue.get()
+    print painting_url_queue.qsize()
+    #painting_url_queue = removeDuplicates(painting_url_queue)
+    #print painting_url_queue.qsize()
 
-    painting_url_queue = removeDuplicates(painting_url_queue)
+    ## Create lock for file
+    #file_lock = threading.Lock()
 
-    # Create lock for file
-    file_lock = threading.Lock()
+    ## Open CSV file for appending
+    #file_obj = open("metadata.csv", "a+")
 
-    # Open CSV file for appending
-    file_obj = open("metadata.csv", "a+")
+    ## Needed to convert dictionary -> CSV
+    #csv_writer = csv.DictWriter(file_obj, csv_fields)
+    #csv_writer.writeheader()
 
-    # Needed to convert dictionary -> CSV
-    csv_writer = csv.DictWriter(file_obj, csv_fields)
-    csv_writer.writeheader()
+    #for i in range(5):
+    #    painting_thread = FetchPainting(painting_url_queue, file_obj, file_lock, file_urls_retrieved)
+    #    painting_thread.setDaemon(True)
+    #    painting_thread.start()
 
-    for i in range(5):
-        painting_thread = FetchPainting(painting_url_queue, file_obj, file_lock, file_urls_retrieved)
-        painting_thread.setDaemon(True)
-        #painting_thread.start()
-
-    painting_url_queue.join()
-    file_obj.close()
+    #painting_url_queue.join()
+    #file_obj.close()
 
 if __name__ == "__main__":
     main()
-
-main()
