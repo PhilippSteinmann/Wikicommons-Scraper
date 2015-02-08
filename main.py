@@ -19,6 +19,9 @@ painting_url_queue = Queue.queue(i)
 # The order of fields that the CSV will be written in
 csv_fields = ["file_name", "file_url"]
 
+# Keep track to prevent duplication
+file_urls_retrieved = []
+
 # This thread takes category_urls from category_url_queue and fetches & parses them
 # Adds new categories and paintings that it finds
 class FetchCategory(threading.Thread):
@@ -57,11 +60,12 @@ class FetchCategory(threading.Thread):
 # This thread takes painting_urls from painting_url_queue and fetches them,
 # Adds to metadata.csv, and downloads image file
 class FetchPainting(threading.Thread):
-    def __init__(self, painting_url_queue, file_obj, file_lock):
+    def __init__(self, painting_url_queue, file_obj, file_lock, file_urls_retrieved):
         threading.Thread.__init__(self)
         self.painting_url_queue = painting_url_queue
         self.file_obj = file_obj
         self.file_lock = file_lock
+        self.file_urls_retrieved = file_urls_retrieved
 
     def readMetaData(self, html):
         return false
@@ -81,6 +85,12 @@ class FetchPainting(threading.Thread):
                 return
 
             file_url = metadata["file_url"]
+            
+            # If we've retrieved image before, don't repeat
+            if file_url in file_urls_retrieved:
+                return
+            file_urls_retrieved.append(file_url)
+
             file_name = self.generateFileName(file_url)
 
             metadata["file_name"] = "images/ " + file_name
