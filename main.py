@@ -11,10 +11,10 @@ from bs4 import BeautifulSoup
 initial_url = "http://commons.wikimedia.org/wiki/Category:1367_paintings"
 
 # A queue containing category pages to be scraped
-category_url_queue = Queue.queue()
+category_url_queue = Queue.Queue()
 
 # A queue containing painting pages to be scraped
-painting_url_queue = Queue.queue(i)
+painting_url_queue = Queue.Queue()
 
 # The order of fields that the CSV will be written in
 csv_fields = ["file_name", "file_url"]
@@ -32,11 +32,11 @@ class FetchCategory(threading.Thread):
 
     # Parse page
     def findOtherCategories(self, html):
-        return (,)
+        return ()
 
     # Parse page
     def findPaintings(self, html):
-        return (,)
+        return ()
 
     def run(self):
         while True:
@@ -55,7 +55,7 @@ class FetchCategory(threading.Thread):
             for painting in paintings_in_page:
                 self.painting_url_queue.put(painting)
 
-            self.category_url_queue().task_done()
+            self.category_url_queue.task_done()
 
 # This thread takes painting_urls from painting_url_queue and fetches them,
 # Adds to metadata.csv, and downloads image file
@@ -104,6 +104,15 @@ class FetchPainting(threading.Thread):
             self.lock.release()
 
 def main():
+    # Spawn a pool of threads, and pass them queue instance
+    for i in range(5):
+        category_thread = FetchCategory(category_url_queue, painting_url_queue)
+        category_thread.setDaemon(True)
+        category_thread.start()
+
+    category_url_queue.put(initial_url)
+    category_url_queue.join()
+
     # Create lock for file
     file_lock = threading.Lock()
 
@@ -114,20 +123,11 @@ def main():
     csv_writer = csv.DictWriter(file_obj, csv_fields)
     csv_writer.writeheader()
 
-    # Spawn a pool of threads, and pass them queue instance
     for i in range(5):
-        category_thread = ThreadUrl(category_url_queue, painting_url_queue)
-        category_thread.setDaemon(True)
-        category_thread.start()
-
-    category_queue.put(initial_url)
-
-    for i in range(5):
-        painting_thread = DatamineThread(painting_url_queue, file_obj, file_lock)
+        painting_thread = FetchPainting(painting_url_queue, file_obj, file_lock)
         painting_thread.setDaemon(True)
         painting_thread.start()
 
-    category_url_queue.join()
     painting_url_queue.join()
     file_obj.close()
 
