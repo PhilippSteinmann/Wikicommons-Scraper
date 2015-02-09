@@ -12,6 +12,13 @@ from bs4 import BeautifulSoup
 NUM_CATEGORY_THREADS = 1
 NUM_PAINTING_THREADS = 1
 
+# The order of fields that the CSV will be written in
+csv_fields = ["title", "creator", "date", "file_name", "file_url", "description_url"]
+
+# URL to start out with
+initial_url = "http://commons.wikimedia.org/wiki/Category:1527_paintings"
+if len(sys.argv) > 1:
+    initial_url = sys.argv[1]
 
 # This thread takes category_urls from category_url_queue and fetches & parses them
 # Adds new categories and paintings that it finds
@@ -67,24 +74,46 @@ class FetchPainting(threading.Thread):
     def readMetaData(self, html):
         soup = BeautifulSoup(html)
 
-        creator_list = soup.select("span#creator")
-        element_next_to_title = soup.select("td#fileinfotpl_art_title")
-        date_list = soup.select(".fileinfotpl-type-artwork .dtstart")
-        if len(creator_list) != 1 or len(element_next_to_title) != 1 or element_next_to_title[0].next_sibling == None or len(date_list) != 1:
+        metadata_table = soup.select(".fileinfotpl-type-artwork")
+        if metadata_table == None:
+            print "missing metadata table"
             return False
 
+        creator_list = soup.select("span#creator")
+        if len(creator_list) != 1:
+            print "missing creator"
         creator = creator_list[0].string
-        title = element_next_to_title[0].next_sibling.string
-        date = date_list[0].string
+
+        date = self.readMetaDataField("#fileinfotpl_date", soup)
+        title = self.readMetaDataField("#fileinfotpl_art_title", soup)
+        medium = self.readMetaDataField("#fileinfotpl_art_medium", soup)
+        dimensions = self.readMetaDataField("#fileinfotpl_art_dimensions", soup)
+
 
         file_url_regex = re.compile(r'Original file')
         file_url_navigable_string = soup.find(text= file_url_regex)
-        file_url = file_url_navigable_string.parent["href"]
+        if file_url_navigable_string != None:
+            file_url = file_url_navigable_string.parent["href"]
+        else:
+            file_url_elem = soup.select(".fullMedia a")
+            if len(file_url_elem) == 0:
+                print "missing file URL"
+                return false
+            file_url = file_url_elem[0]["href"]
         file_url = self.fix_file_url(file_url)
         return { "creator": creator, "title": title, "date":date, "file_url":file_url}
 
+    def readMetaDataField(self, sibling_field_id, soup):
+        sibling_elem = soup.select(sibling_field_id)
+        if len(sibling_elem) != 1 or sibling_elem[0].next_sibling == None:
+            return ""
+        field_elem = sibling_elem[0].next_sibling.next_sibling
+        field_value = ''.join(field_elem.findAll(text=True))
+        return field_value
+
+
     def generateFileName(self, metadata):
-        file_extension = metadata["file_url"][-4:-1]
+        file_extension = metadata["file_url"][-4:]
         return self.path_safe(metadata["creator"]) + "_" + self.path_safe(metadata["title"]) + "_" + self.path_safe(metadata["date"]) + file_extension
 
     def path_safe(self, string):
@@ -99,11 +128,13 @@ class FetchPainting(threading.Thread):
         while True:
             # Pop from queue
             painting_url = self.painting_url_queue.get()
+            print painting_url
             html = urllib2.urlopen(painting_url).read()
 
             # Read metadata from HTML
             metadata = self.readMetaData(html)
             if not metadata:
+                print "exiting for lack of metadata"
                 self.painting_url_queue.task_done()
                 continue
 
@@ -111,6 +142,7 @@ class FetchPainting(threading.Thread):
             
             # If we've retrieved image before, don't repeat
             if file_url in self.file_urls_retrieved:
+                print "already fetched"
                 self.painting_url_queue.task_done()
                 continue
 
@@ -119,9 +151,12 @@ class FetchPainting(threading.Thread):
             file_name = self.generateFileName(metadata)
 
             metadata["file_name"] = "images/ " + file_name
+            metadata["description_url"] = painting_url
+            print metadata
             # Write image file to images/ directory
-            print file_url
             urllib.urlretrieve(file_url, "images/" + file_name)
+
+            metadata = {k:v.encode('utf8') for k,v in metadata.items()}
 
             # Lock needed to prevent mess when multiple threads are writing
             # If lock is locked, will wait until released
@@ -129,6 +164,8 @@ class FetchPainting(threading.Thread):
             self.csv_writer.writerow(metadata)
             self.file_lock.release()
             self.painting_url_queue.task_done()
+            print
+            print
             print
 
 
@@ -147,19 +184,11 @@ def removeDuplicates(queue):
     return newQueue
 
 def main():
-    # URL to start out with
-    initial_url = "http://commons.wikimedia.org/wiki/Category:1380_paintings"
-    if len(sys.argv) > 1:
-        initial_url = sys.argv[1]
-
     # A queue containing category pages to be scraped
     category_url_queue = Queue.Queue()
 
     # A queue containing painting pages to be scraped
     painting_url_queue = Queue.Queue()
-
-    # The order of fields that the CSV will be written in
-    csv_fields = ["title", "creator", "date", "file_name", "file_url"]
 
     # Keep track to prevent duplication
     file_urls_retrieved = []
