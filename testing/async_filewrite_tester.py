@@ -1,6 +1,7 @@
 import csv
 import threading
 import random
+import time
 
 class WriteToCSV(threading.Thread):
     def __init__(self, lock):
@@ -33,3 +34,4 @@ for i in range(10):
     thread = WriteToCSV(file_lock)
     thread.setDaemon(True)
     thread.start()
+    time.sleep(0.5)

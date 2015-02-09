@@ -4,7 +4,9 @@ import threading
 import urllib2
 import urllib
 import time
+import string
 import csv
+import random
 import re
 import sys
 from bs4 import BeautifulSoup
@@ -13,7 +15,7 @@ NUM_CATEGORY_THREADS = 1
 NUM_PAINTING_THREADS = 1
 
 # The order of fields that the CSV will be written in
-csv_fields = ["title", "creator", "date", "file_name", "file_url", "description_url"]
+csv_fields = ["artist", "title", "date", "medium", "dimensions", "file_name", "file_url", "description_url"]
 
 # URL to start out with
 initial_url = "http://commons.wikimedia.org/wiki/Category:1527_paintings"
@@ -75,14 +77,16 @@ class FetchPainting(threading.Thread):
         soup = BeautifulSoup(html)
 
         metadata_table = soup.select(".fileinfotpl-type-artwork")
-        if metadata_table == None:
+        if len(metadata_table) == 0:
             print "missing metadata table"
             return False
 
-        creator_list = soup.select("span#creator")
-        if len(creator_list) != 1:
-            print "missing creator"
-        creator = creator_list[0].string
+        artist_list = soup.select("span#creator")
+        if len(artist_list) == 0:
+            print "missing artist"
+            artist = ""
+        else:
+            artist = artist_list[0].string
 
         date = self.readMetaDataField("#fileinfotpl_date", soup)
         title = self.readMetaDataField("#fileinfotpl_art_title", soup)
@@ -101,7 +105,7 @@ class FetchPainting(threading.Thread):
                 return false
             file_url = file_url_elem[0]["href"]
         file_url = self.fix_file_url(file_url)
-        return { "creator": creator, "title": title, "date":date, "file_url":file_url}
+        return { "artist": artist, "title": title, "date":date, "medium": medium, "dimensions": dimensions, "file_url":file_url}
 
     def readMetaDataField(self, sibling_field_id, soup):
         sibling_elem = soup.select(sibling_field_id)
@@ -109,12 +113,18 @@ class FetchPainting(threading.Thread):
             return ""
         field_elem = sibling_elem[0].next_sibling.next_sibling
         field_value = ''.join(field_elem.findAll(text=True))
+        field_value = string.rstrip(field_value)
         return field_value
 
 
     def generateFileName(self, metadata):
         file_extension = metadata["file_url"][-4:]
-        return self.path_safe(metadata["creator"]) + "_" + self.path_safe(metadata["title"]) + "_" + self.path_safe(metadata["date"]) + file_extension
+        random_part = ''.join(random.choice(string.digits) for i in range(6))
+        if metadata["artist"] == "":
+            artist_name = "Unkown_Artist"
+        else:
+            artist_name = self.path_safe(metadata["artist"])
+        return  artist_name + "_" + random_part + file_extension
 
     def path_safe(self, string):
         return string.replace(" ", "_")
@@ -203,7 +213,7 @@ def main():
     category_url_queue.join()
 
     #painting_url_queue = removeDuplicates(painting_url_queue)
-    #painting_url_queue.join()
+    #painting_url_quee.join()
 
     # Create lock for file
     file_lock = threading.Lock()
@@ -214,6 +224,7 @@ def main():
     # Needed to convert dictionary -> CSV
     csv_writer = csv.DictWriter(file_obj, csv_fields)
     csv_writer.writeheader()
+    time.sleep(0.5)
 
     for i in range(NUM_PAINTING_THREADS):
         painting_thread = FetchPainting(painting_url_queue, file_obj, file_lock, file_urls_retrieved, csv_writer)
