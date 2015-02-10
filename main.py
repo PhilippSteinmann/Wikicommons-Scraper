@@ -250,9 +250,7 @@ def main():
         category_thread.setDaemon(True)
         category_thread.start()
 
-    category_url_queue.join()
 
-    painting_url_queue.put("http://commons.wikimedia.org/wiki/File:Nicoletto_Semitecolo_-_Two_Christians_before_the_Judges_-_WGA21152.jpg")
     painting_urls_retrieved = []
 
     # Create lock for file
@@ -281,6 +279,7 @@ def main():
         painting_thread.start()
 
     painting_url_queue.join()
+    category_url_queue.join()
     file_obj.close()
 
 if __name__ == "__main__":
