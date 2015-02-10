@@ -12,16 +12,30 @@ import re
 import sys
 from bs4 import BeautifulSoup
 
-NUM_CATEGORY_THREADS = 20
-NUM_PAINTING_THREADS = 20
+# A thread is a part of a program thar can run simultaneously with others
+NUM_CATEGORY_THREADS = 40
+NUM_PAINTING_THREADS = 40
+
+# URL to start out with
+initial_url = "http://commons.wikimedia.org/wiki/Category:1527_paintings"
+
+download_images = False
 
 # The order of fields that the CSV will be written in
 csv_fields = ["artist", "title", "date", "medium", "dimensions", "file_name", "file_url", "description_url"]
 
-# URL to start out with
-initial_url = "http://commons.wikimedia.org/wiki/Category:1527_paintings"
-if len(sys.argv) > 1:
+# If the user specified URL, use that
+if len(sys.argv) >= 2:
     initial_url = sys.argv[1]
+
+if len(sys.argv) >= 3:
+    if sys.argv[2] == "download":
+        download_images = True
+    elif sys.argv[2] == "nodownload":
+        download_images = False
+    else:
+        print "USAGE: python main.py <URL> <download/nodownload>"
+        sys.exit()
 
 # This thread takes category_urls from category_url_queue and fetches & parses them
 # Adds new categories and paintings that it finds
@@ -33,13 +47,13 @@ class FetchCategory(threading.Thread):
         self.category_urls_retrieved = category_urls_retrieved
         self.base_url = "http://commons.wikimedia.org" 
 
-    # Parse page
+    # Parse page for category links
     def findOtherCategories(self, soup):
         category_links = soup.select("a.CategoryTreeLabel.CategoryTreeLabelNs14.CategoryTreeLabelCategory")
         links = [self.base_url + link["href"] for link in category_links]
         return links
 
-    # Parse page
+    # Parse page for painting links
     def findPaintings(self, soup):
         painting_links = soup.select(".gallery.mw-gallery-traditional a.image")
         links = [self.base_url + link["href"] for link in painting_links]
@@ -49,17 +63,24 @@ class FetchCategory(threading.Thread):
         while True:
             # Pop from queue
             category_url = self.category_url_queue.get()
-            print "Now looking at %s" % (category_url)
+            print "Category #%d: Looking at %s" % (len(self.category_urls_retrieved) + 1, category_url)
 
+            # Check if duplicate
             if category_url in self.category_urls_retrieved:
                 print "Already fetched %s" % (category_url)
                 self.category_url_queue.task_done()
                 continue
 
+            self.category_urls_retrieved.append(category_url)
+
+            # Fetch HTML, feed to Beautiful Soup
             html = urllib2.urlopen(category_url).read()
             soup = BeautifulSoup(html)
+
+            # Get list of categories and paintings as list
             categories_in_page = self.findOtherCategories(soup)
             paintings_in_page = self.findPaintings(soup)
+
             # Put categories in page in categories queue
             for category in categories_in_page:
                 self.category_url_queue.put(category)
@@ -67,7 +88,7 @@ class FetchCategory(threading.Thread):
             # Put paintings in page in paintings queue
             for painting in paintings_in_page:
                 self.painting_url_queue.put(painting)
-            #time.sleep(0.2)
+
             self.category_url_queue.task_done()
 
 
@@ -89,12 +110,14 @@ class FetchPainting(threading.Thread):
         if len(metadata_table) == 0:
             return False
 
+        # Get all <spans> with ID "creator"
         artist_list = soup.select("span#creator")
         if len(artist_list) == 0:
-            print "missing artist"
             artist = ""
         else:
             artist = artist_list[0].string
+            if artist == None:
+                artist = ""
 
         date = self.readMetaDataField("#fileinfotpl_date", soup)
         title = self.readMetaDataField("#fileinfotpl_art_title", soup)
@@ -128,11 +151,12 @@ class FetchPainting(threading.Thread):
     def generateFileName(self, metadata):
         file_extension = metadata["file_url"][-4:]
         random_part = ''.join(random.choice(string.digits) for i in range(6))
-        if metadata["artist"] == "":
+        if metadata["artist"] == "" or metadata["artist"] == None or "artist" not in metadata:
             artist_name = "Unkown_Artist"
         else:
             artist_name = self.path_safe(metadata["artist"])
-        return  artist_name + "_" + random_part + file_extension
+
+        return artist_name + "_" + random_part + file_extension
 
     def path_safe(self, string):
         return string.replace(" ", "_")
@@ -146,7 +170,7 @@ class FetchPainting(threading.Thread):
         while True:
             # Pop from queue
             painting_url = self.painting_url_queue.get()
-            print "Now looking at %s" % (painting_url)
+            print "Painting #%d: Looking at %s" % (len(self.painting_urls_retrieved) + 1, painting_url)
 
             # If we've retrieved image before, don't repeat
             if painting_url in self.painting_urls_retrieved:
@@ -155,7 +179,7 @@ class FetchPainting(threading.Thread):
                 continue
 
             html = urllib2.urlopen(painting_url).read()
-
+    
             # Read metadata from HTML
             metadata = self.readMetaData(html)
             if not metadata:
@@ -172,9 +196,12 @@ class FetchPainting(threading.Thread):
             metadata["file_name"] = "images/ " + file_name
             metadata["description_url"] = painting_url
             #print metadata
-            # Write image file to images/ directory
-            urllib.urlretrieve(file_url, "images/" + file_name)
 
+            if download_images:
+                # Write image file to images/ directory
+                urllib.urlretrieve(file_url, "images/" + file_name)
+
+            # Encode dictionary to UTF-8, because many works have special characters
             metadata = {k:v.encode('utf8') for k,v in metadata.items()}
 
             # Lock needed to prevent mess when multiple threads are writing
@@ -211,9 +238,9 @@ def main():
     category_urls_retrieved = []
 
     # Keep track to prevent duplication
-    print "=" * 45
+    print "=" * 50
     print "Spawning %d threads to search all categories..." % (NUM_CATEGORY_THREADS)
-    print "=" * 45
+    print "=" * 50
     print
 
     category_url_queue.put(initial_url)
@@ -243,9 +270,9 @@ def main():
     time.sleep(0.5)
 
     print
-    print "=" * 45
+    print "=" * 50
     print "Spawning %d threads to download all paintings..." % (NUM_PAINTING_THREADS)
-    print "=" * 45
+    print "=" * 50
     print
 
     for i in range(NUM_PAINTING_THREADS):
