@@ -2,6 +2,7 @@
 import Queue
 import threading
 import urllib2
+import os
 import urllib
 import time
 import string
@@ -11,8 +12,8 @@ import re
 import sys
 from bs4 import BeautifulSoup
 
-NUM_CATEGORY_THREADS = 1
-NUM_PAINTING_THREADS = 1
+NUM_CATEGORY_THREADS = 20
+NUM_PAINTING_THREADS = 20
 
 # The order of fields that the CSV will be written in
 csv_fields = ["artist", "title", "date", "medium", "dimensions", "file_name", "file_url", "description_url"]
@@ -25,11 +26,13 @@ if len(sys.argv) > 1:
 # This thread takes category_urls from category_url_queue and fetches & parses them
 # Adds new categories and paintings that it finds
 class FetchCategory(threading.Thread):
-    def __init__(self, category_url_queue, painting_url_queue):
+    def __init__(self, category_url_queue, painting_url_queue, category_urls_retrieved):
         threading.Thread.__init__(self)
         self.category_url_queue = category_url_queue
         self.painting_url_queue = painting_url_queue
+        self.category_urls_retrieved = category_urls_retrieved
         self.base_url = "http://commons.wikimedia.org" 
+
     # Parse page
     def findOtherCategories(self, soup):
         category_links = soup.select("a.CategoryTreeLabel.CategoryTreeLabelNs14.CategoryTreeLabelCategory")
@@ -46,7 +49,13 @@ class FetchCategory(threading.Thread):
         while True:
             # Pop from queue
             category_url = self.category_url_queue.get()
-            #print category_url + "\n"
+            print "Now looking at %s" % (category_url)
+
+            if category_url in self.category_urls_retrieved:
+                print "Already fetched %s" % (category_url)
+                self.category_url_queue.task_done()
+                continue
+
             html = urllib2.urlopen(category_url).read()
             soup = BeautifulSoup(html)
             categories_in_page = self.findOtherCategories(soup)
@@ -65,12 +74,12 @@ class FetchCategory(threading.Thread):
 # This thread takes painting_urls from painting_url_queue and fetches them,
 # adds to metadata.csv, and downloads image file
 class FetchPainting(threading.Thread):
-    def __init__(self, painting_url_queue, file_obj, file_lock, file_urls_retrieved, csv_writer):
+    def __init__(self, painting_url_queue, file_obj, file_lock, painting_urls_retrieved, csv_writer):
         threading.Thread.__init__(self)
         self.painting_url_queue = painting_url_queue
         self.file_obj = file_obj
         self.file_lock = file_lock
-        self.file_urls_retrieved = file_urls_retrieved
+        self.painting_urls_retrieved = painting_urls_retrieved
         self.csv_writer = csv_writer
 
     def readMetaData(self, html):
@@ -78,7 +87,6 @@ class FetchPainting(threading.Thread):
 
         metadata_table = soup.select(".fileinfotpl-type-artwork")
         if len(metadata_table) == 0:
-            print "missing metadata table"
             return False
 
         artist_list = soup.select("span#creator")
@@ -138,31 +146,32 @@ class FetchPainting(threading.Thread):
         while True:
             # Pop from queue
             painting_url = self.painting_url_queue.get()
-            print painting_url
+            print "Now looking at %s" % (painting_url)
+
+            # If we've retrieved image before, don't repeat
+            if painting_url in self.painting_urls_retrieved:
+                print "Already fetched %s" % (painting_url)
+                self.painting_url_queue.task_done()
+                continue
+
             html = urllib2.urlopen(painting_url).read()
 
             # Read metadata from HTML
             metadata = self.readMetaData(html)
             if not metadata:
-                print "exiting for lack of metadata"
+                print "Exiting for lack of metadata at %s" % (painting_url)
                 self.painting_url_queue.task_done()
                 continue
 
             file_url = metadata["file_url"]
             
-            # If we've retrieved image before, don't repeat
-            if file_url in self.file_urls_retrieved:
-                print "already fetched"
-                self.painting_url_queue.task_done()
-                continue
-
-            self.file_urls_retrieved.append(file_url)
+            self.painting_urls_retrieved.append(file_url)
 
             file_name = self.generateFileName(metadata)
 
             metadata["file_name"] = "images/ " + file_name
             metadata["description_url"] = painting_url
-            print metadata
+            #print metadata
             # Write image file to images/ directory
             urllib.urlretrieve(file_url, "images/" + file_name)
 
@@ -173,10 +182,9 @@ class FetchPainting(threading.Thread):
             self.file_lock.acquire()
             self.csv_writer.writerow(metadata)
             self.file_lock.release()
+
             self.painting_url_queue.task_done()
-            print
-            print
-            print
+            print "Successfully fetched %s" % (painting_url)
 
 
 def removeDuplicates(queue):
@@ -200,20 +208,25 @@ def main():
     # A queue containing painting pages to be scraped
     painting_url_queue = Queue.Queue()
 
+    category_urls_retrieved = []
+
     # Keep track to prevent duplication
-    file_urls_retrieved = []
+    print "=" * 45
+    print "Spawning %d threads to search all categories..." % (NUM_CATEGORY_THREADS)
+    print "=" * 45
+    print
 
     category_url_queue.put(initial_url)
     # Spawn a pool of threads, and pass them the queue instance
     for i in range(NUM_CATEGORY_THREADS):
-        category_thread = FetchCategory(category_url_queue, painting_url_queue)
+        category_thread = FetchCategory(category_url_queue, painting_url_queue, category_urls_retrieved)
         category_thread.setDaemon(True)
         category_thread.start()
 
     category_url_queue.join()
 
-    #painting_url_queue = removeDuplicates(painting_url_queue)
-    #painting_url_quee.join()
+    painting_url_queue.put("http://commons.wikimedia.org/wiki/File:Nicoletto_Semitecolo_-_Two_Christians_before_the_Judges_-_WGA21152.jpg")
+    painting_urls_retrieved = []
 
     # Create lock for file
     file_lock = threading.Lock()
@@ -221,13 +234,22 @@ def main():
     # Open CSV file for appending
     file_obj = open("metadata.csv", "a+")
 
+    if not os.path.exists("images/"):
+        os.makedirs("images/")
+
     # Needed to convert dictionary -> CSV
     csv_writer = csv.DictWriter(file_obj, csv_fields)
     csv_writer.writeheader()
     time.sleep(0.5)
 
+    print
+    print "=" * 45
+    print "Spawning %d threads to download all paintings..." % (NUM_PAINTING_THREADS)
+    print "=" * 45
+    print
+
     for i in range(NUM_PAINTING_THREADS):
-        painting_thread = FetchPainting(painting_url_queue, file_obj, file_lock, file_urls_retrieved, csv_writer)
+        painting_thread = FetchPainting(painting_url_queue, file_obj, file_lock, painting_urls_retrieved, csv_writer)
         painting_thread.setDaemon(True)
         painting_thread.start()
 
