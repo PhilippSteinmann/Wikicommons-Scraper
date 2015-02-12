@@ -40,11 +40,12 @@ if len(sys.argv) >= 3:
 # This thread takes category_urls from category_url_queue and fetches & parses them
 # Adds new categories and paintings that it finds
 class FetchCategory(threading.Thread):
-    def __init__(self, category_url_queue, painting_url_queue, category_urls_retrieved):
+    def __init__(self, category_url_queue, painting_url_queue, category_urls_retrieved, category_urls_failed_to_retrieve):
         threading.Thread.__init__(self)
         self.category_url_queue = category_url_queue
         self.painting_url_queue = painting_url_queue
         self.category_urls_retrieved = category_urls_retrieved
+        self.category_urls_failed_to_retrieve = category_urls_failed_to_retrieve
         self.base_url = "http://commons.wikimedia.org" 
 
     # Parse page for category links
@@ -74,7 +75,19 @@ class FetchCategory(threading.Thread):
             self.category_urls_retrieved.append(category_url)
 
             # Fetch HTML, feed to Beautiful Soup
-            html = urllib2.urlopen(category_url).read()
+            try:
+                html = urllib2.urlopen(category_url).read()
+            except:
+                # If we've tried and failed to retrieve before, there's no point
+                # in trying again. But if it's first failure, let's put it
+                # back into queue and try again.
+                if category_url not in self.category_urls_failed_to_retrieve:
+                    self.category_url_queue.put(category_url)
+                    self.category_urls_failed_to_retrieve.append(category_url)
+
+                self.category_url_queue.task_done()
+                continue
+
             soup = BeautifulSoup(html)
 
             # Get list of categories and paintings as list
@@ -95,12 +108,13 @@ class FetchCategory(threading.Thread):
 # This thread takes painting_urls from painting_url_queue and fetches them,
 # adds to metadata.csv, and downloads image file
 class FetchPainting(threading.Thread):
-    def __init__(self, painting_url_queue, file_obj, file_lock, painting_urls_retrieved, csv_writer):
+    def __init__(self, painting_url_queue, file_obj, file_lock, painting_urls_retrieved, painting_urls_failed_to_retrieve, csv_writer):
         threading.Thread.__init__(self)
         self.painting_url_queue = painting_url_queue
         self.file_obj = file_obj
         self.file_lock = file_lock
         self.painting_urls_retrieved = painting_urls_retrieved
+        self.painting_urls_failed_to_retrieve = painting_urls_failed_to_retrieve
         self.csv_writer = csv_writer
 
     def readMetaData(self, html):
@@ -178,7 +192,19 @@ class FetchPainting(threading.Thread):
                 self.painting_url_queue.task_done()
                 continue
 
-            html = urllib2.urlopen(painting_url).read()
+
+            try:
+                html = urllib2.urlopen(painting_url).read()
+            except:
+                # If we've tried and failed to retrieve before, there's no point
+                # in trying again. But if it's first failure, let's put it
+                # back into queue and try again.
+                if painting_url not in self.painting_urls_failed_to_retrieve:
+                    self.painting_url_queue.put(painting_url)
+                    self.painting_urls_failed_to_retrieve.append(painting_url)
+
+                self.painting_url_queue.task_done()
+                continue
     
             # Read metadata from HTML
             metadata = self.readMetaData(html)
@@ -236,6 +262,7 @@ def main():
     painting_url_queue = Queue.Queue()
 
     category_urls_retrieved = []
+    category_urls_failed_to_retrieve = []
 
     # Keep track to prevent duplication
     print "=" * 50
@@ -246,12 +273,13 @@ def main():
     category_url_queue.put(initial_url)
     # Spawn a pool of threads, and pass them the queue instance
     for i in range(NUM_CATEGORY_THREADS):
-        category_thread = FetchCategory(category_url_queue, painting_url_queue, category_urls_retrieved)
+        category_thread = FetchCategory(category_url_queue, painting_url_queue, category_urls_retrieved, category_urls_failed_to_retrieve)
         category_thread.setDaemon(True)
         category_thread.start()
 
 
     painting_urls_retrieved = []
+    painting_urls_failed_to_retrieve = []
 
     # Create lock for file
     file_lock = threading.Lock()
@@ -274,7 +302,7 @@ def main():
     print
 
     for i in range(NUM_PAINTING_THREADS):
-        painting_thread = FetchPainting(painting_url_queue, file_obj, file_lock, painting_urls_retrieved, csv_writer)
+        painting_thread = FetchPainting(painting_url_queue, file_obj, file_lock, painting_urls_retrieved, painting_urls_failed_to_retrieve, csv_writer)
         painting_thread.setDaemon(True)
         painting_thread.start()
 
