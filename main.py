@@ -128,15 +128,26 @@ class FetchPainting(threading.Thread):
         artist_list = soup.select("span#creator")
         if len(artist_list) == 0:
             artist = ""
+            return False
         else:
             artist = artist_list[0].string
             if artist == None:
                 artist = ""
 
+        artist_wikipedia_link = soup.select("span#creator a")
+        if artist != "Unkown" and len(artist_wikipedia_link) == 0:
+            return False
+
+
+        # These fields are situated similarly in the HTML, so I made a single
+        # easy function to fetch them.
         date = self.readMetaDataField("#fileinfotpl_date", soup)
         title = self.readMetaDataField("#fileinfotpl_art_title", soup)
         medium = self.readMetaDataField("#fileinfotpl_art_medium", soup)
         dimensions = self.readMetaDataField("#fileinfotpl_art_dimensions", soup)
+
+        if not date or not title or not medium or not dimensions:
+            return False
 
 
         file_url_regex = re.compile(r'Original file')
@@ -155,7 +166,7 @@ class FetchPainting(threading.Thread):
     def readMetaDataField(self, sibling_field_id, soup):
         sibling_elem = soup.select(sibling_field_id)
         if len(sibling_elem) != 1 or sibling_elem[0].next_sibling == None:
-            return ""
+            return False
         field_elem = sibling_elem[0].next_sibling.next_sibling
         field_value = ''.join(field_elem.findAll(text=True))
         field_value = string.rstrip(field_value)
