@@ -13,8 +13,8 @@ import sys
 from bs4 import BeautifulSoup
 
 # A thread is a part of a program thar can run simultaneously with others
-NUM_CATEGORY_THREADS = 40
-NUM_PAINTING_THREADS = 40
+NUM_CATEGORY_THREADS = 60
+NUM_PAINTING_THREADS = 60
 
 # URL to start out with
 initial_url = "http://commons.wikimedia.org/wiki/Category:1527_paintings"
@@ -51,6 +51,14 @@ class FetchCategory(threading.Thread):
     # Parse page for category links
     def findOtherCategories(self, soup):
         category_links = soup.select("a.CategoryTreeLabel.CategoryTreeLabelNs14.CategoryTreeLabelCategory")
+
+        next_page_regex = re.compile(r'next 200')
+        next_page_navigable_string = soup.find(text=next_page_regex)
+        if next_page_navigable_string != None:
+            next_page = next_page_navigable_string.parent
+            if next_page.name == "a":
+                category_links.append(next_page)
+
         links = [self.base_url + link["href"] for link in category_links]
         return links
 
