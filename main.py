@@ -202,12 +202,12 @@ class FetchPainting(threading.Thread):
     def generateFileName(self, metadata):
         file_extension = metadata["file_url"][-4:]
         random_part = ''.join(random.choice(string.digits) for i in range(6))
-        if metadata["artist"] == "" or metadata["artist"] == None or "artist" not in metadata:
+        if metadata["artist"] == "" or not metadata["artist"] or "artist" not in metadata:
             artist_name = "Unkown_Artist"
         else:
             artist_name = self.path_safe(metadata["artist"])
 
-        return artist_name + "_" + random_part + file_extension
+        return artist_name.encode("utf-8") + "_" + random_part + file_extension
 
     def path_safe(self, string):
         return string.replace(" ", "_")
@@ -246,6 +246,8 @@ class FetchPainting(threading.Thread):
             # Read metadata from HTML
             metadata, problems = self.readMetaData(html)
             metadata["description_url"] = painting_url
+            # Encode dictionary to UTF-8, because many works have special characters
+            metadata = { k:(v.encode('utf8') if v else "") for k,v in metadata.items() }
 
             if len(problems) > 0:
                 print "Exiting for lack of metadata at %s" % (painting_url)
@@ -265,9 +267,6 @@ class FetchPainting(threading.Thread):
             if download_images:
                 # Write image file to images/ directory
                 urllib.urlretrieve(file_url, "images/" + file_name)
-
-            # Encode dictionary to UTF-8, because many works have special characters
-            metadata = {k:v.encode('utf8') for k,v in metadata.items()}
 
             # Lock needed to prevent mess when multiple threads are writing
             # If lock is locked, will wait until released
