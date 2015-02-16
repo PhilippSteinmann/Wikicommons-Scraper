@@ -3,3 +3,5 @@
 test_output
 images/*
 metadata.csv
+failed.csv
+notes

@@ -16,6 +16,8 @@ from bs4 import BeautifulSoup
 NUM_CATEGORY_THREADS = 60
 NUM_PAINTING_THREADS = 60
 
+LOG_REJECTED_PAINTINGS = True
+
 # URL to start out with
 initial_url = "http://commons.wikimedia.org/wiki/Category:1527_paintings"
 
@@ -116,47 +118,63 @@ class FetchCategory(threading.Thread):
 # This thread takes painting_urls from painting_url_queue and fetches them,
 # adds to metadata.csv, and downloads image file
 class FetchPainting(threading.Thread):
-    def __init__(self, painting_url_queue, file_obj, file_lock, painting_urls_retrieved, painting_urls_failed_to_retrieve, csv_writer):
+    def __init__(self, painting_url_queue, successful_file, successful_lock, rejected_file, rejected_lock, painting_urls_retrieved, painting_urls_failed_to_retrieve, csv_writer_successful, csv_writer_rejected):
         threading.Thread.__init__(self)
         self.painting_url_queue = painting_url_queue
-        self.file_obj = file_obj
-        self.file_lock = file_lock
+        self.successful_file = successful_file
+        self.successful_lock = successful_lock
+        self.rejected_file = rejected_file
+        self.rejected_lock = rejected_lock
         self.painting_urls_retrieved = painting_urls_retrieved
         self.painting_urls_failed_to_retrieve = painting_urls_failed_to_retrieve
-        self.csv_writer = csv_writer
+        self.csv_writer_successful = csv_writer_successful
+        self.csv_writer_rejected = csv_writer_rejected
 
     def readMetaData(self, html):
         soup = BeautifulSoup(html)
 
+        metadata = { "artist": "", "title": "", "date": "", "medium": "", "dimensions": "", "file_url":""}
+        problems = []
+
         metadata_table = soup.select(".fileinfotpl-type-artwork")
         if len(metadata_table) == 0:
-            return False
+            problems.append("missing artwork table")
 
         # Get all <spans> with ID "creator"
         artist_list = soup.select("span#creator")
+        artist = ""
+
         if len(artist_list) == 0:
-            artist = ""
-            return False
+            problems.append("missing artist")
+
         else:
             artist = artist_list[0].string
             if artist == None:
                 artist = ""
+                problems.append("empty artist")
+
+            metadata["artist"] = artist
 
         artist_wikipedia_link = soup.select("span#creator a")
         if artist != "Unkown" and len(artist_wikipedia_link) == 0:
-            return False
+            problems.append("missing artist wikipedia link")
 
 
         # These fields are situated similarly in the HTML, so I made a single
         # easy function to fetch them.
-        date = self.readMetaDataField("#fileinfotpl_date", soup)
-        title = self.readMetaDataField("#fileinfotpl_art_title", soup)
-        medium = self.readMetaDataField("#fileinfotpl_art_medium", soup)
-        dimensions = self.readMetaDataField("#fileinfotpl_art_dimensions", soup)
+        metadata["date"] = self.readMetaDataField("#fileinfotpl_date", soup)
+        metadata["title"] = self.readMetaDataField("#fileinfotpl_art_title", soup)
+        metadata["medium"] = self.readMetaDataField("#fileinfotpl_art_medium", soup)
+        metadata["dimensions"] = self.readMetaDataField("#fileinfotpl_art_dimensions", soup)
 
-        if not date or not title or not medium or not dimensions:
-            return False
-
+        if not metadata["date"]:
+            problems.append("missing date")
+        if not metadata["title"]:
+            problems.append("missing title")
+        if not metadata["medium"]:
+            problems.append("missing medium")
+        if not metadata["dimensions"]:
+            problems.append("missing dimensions")
 
         file_url_regex = re.compile(r'Original file')
         file_url_navigable_string = soup.find(text= file_url_regex)
@@ -165,11 +183,11 @@ class FetchPainting(threading.Thread):
         else:
             file_url_elem = soup.select(".fullMedia a")
             if len(file_url_elem) == 0:
-                print "missing file URL"
-                return false
+                problems.append("missing file URL")
+
             file_url = file_url_elem[0]["href"]
         file_url = self.fix_file_url(file_url)
-        return { "artist": artist, "title": title, "date":date, "medium": medium, "dimensions": dimensions, "file_url":file_url}
+        return (metadata, problems)
 
     def readMetaDataField(self, sibling_field_id, soup):
         sibling_elem = soup.select(sibling_field_id)
@@ -226,21 +244,23 @@ class FetchPainting(threading.Thread):
                 continue
     
             # Read metadata from HTML
-            metadata = self.readMetaData(html)
-            if not metadata:
+            metadata, problems = self.readMetaData(html)
+            metadata["description_url"] = painting_url
+
+            if len(problems) > 0:
                 print "Exiting for lack of metadata at %s" % (painting_url)
+                if LOG_REJECTED_PAINTINGS:
+                    self.rejected_lock.acquire()
+                    self.csv_writer_rejected.writerow(metadata)
+                    self.rejected_lock.release()
                 self.painting_url_queue.task_done()
                 continue
 
             file_url = metadata["file_url"]
-            
             self.painting_urls_retrieved.append(file_url)
 
             file_name = self.generateFileName(metadata)
-
             metadata["file_name"] = "images/ " + file_name
-            metadata["description_url"] = painting_url
-            #print metadata
 
             if download_images:
                 # Write image file to images/ directory
@@ -251,9 +271,9 @@ class FetchPainting(threading.Thread):
 
             # Lock needed to prevent mess when multiple threads are writing
             # If lock is locked, will wait until released
-            self.file_lock.acquire()
-            self.csv_writer.writerow(metadata)
-            self.file_lock.release()
+            self.successful_lock.acquire()
+            self.csv_writer_successful.writerow(metadata)
+            self.successful_lock.release()
 
             self.painting_url_queue.task_done()
             print "Successfully fetched %s" % (painting_url)
@@ -301,17 +321,22 @@ def main():
     painting_urls_failed_to_retrieve = []
 
     # Create lock for file
-    file_lock = threading.Lock()
+    successful_lock = threading.Lock()
+    rejected_lock = threading.Lock()
 
     # Open CSV file for appending
-    file_obj = open("metadata.csv", "a+")
+    successful_file = open("metadata.csv", "a+")
+    rejected_file = open("failed.csv", "a+")
 
-    if not os.path.exists("images/"):
+    if download_images and not os.path.exists("images/"):
         os.makedirs("images/")
 
     # Needed to convert dictionary -> CSV
-    csv_writer = csv.DictWriter(file_obj, csv_fields)
-    csv_writer.writeheader()
+    csv_writer_successful = csv.DictWriter(successful_file, csv_fields)
+    csv_writer_successful.writeheader()
+
+    csv_writer_rejected = csv.DictWriter(rejected_file, csv_fields)
+    csv_writer_rejected.writeheader()
     time.sleep(0.5)
 
     print
@@ -321,13 +346,14 @@ def main():
     print
 
     for i in range(NUM_PAINTING_THREADS):
-        painting_thread = FetchPainting(painting_url_queue, file_obj, file_lock, painting_urls_retrieved, painting_urls_failed_to_retrieve, csv_writer)
+        painting_thread = FetchPainting(painting_url_queue, successful_file, successful_lock, rejected_file, rejected_lock, painting_urls_retrieved, painting_urls_failed_to_retrieve, csv_writer_successful, csv_writer_rejected)
         painting_thread.setDaemon(True)
         painting_thread.start()
 
     painting_url_queue.join()
     category_url_queue.join()
-    file_obj.close()
+    successful_file.close()
+    rejected_file.close() 
 
 if __name__ == "__main__":
     main()
