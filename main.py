@@ -17,6 +17,7 @@ NUM_CATEGORY_THREADS = 60
 NUM_PAINTING_THREADS = 60
 
 LOG_REJECTED_PAINTINGS = True
+MAXIMUM_PAINTING_DATE = 1980
 
 # URL to start out with
 initial_url = "http://commons.wikimedia.org/wiki/Category:1527_paintings"
@@ -24,7 +25,8 @@ initial_url = "http://commons.wikimedia.org/wiki/Category:1527_paintings"
 download_images = False
 
 # The order of fields that the CSV will be written in
-csv_fields = ["artist", "title", "date", "medium", "dimensions", "file_name", "file_url", "description_url"]
+csv_fields_successful = ["artist", "title", "date", "medium", "dimensions", "file_name", "file_url", "description_url"]
+csv_fields_rejected = ["problems", "artist", "title", "date", "medium", "dimensions", "file_name", "file_url", "description_url"]
 
 # If the user specified URL, use that
 if len(sys.argv) >= 2:
@@ -176,6 +178,9 @@ class FetchPainting(threading.Thread):
         if not metadata["dimensions"]:
             problems.append("missing dimensions")
 
+        if metadata["date"] and metadata["date"].isdigit() and int(metadata["date"]) > MAXIMUM_PAINTING_DATE:
+            problems.append("too recent")
+
         file_url_regex = re.compile(r'Original file')
         file_url_navigable_string = soup.find(text= file_url_regex)
         if file_url_navigable_string != None:
@@ -207,7 +212,7 @@ class FetchPainting(threading.Thread):
         else:
             artist_name = self.path_safe(metadata["artist"])
 
-        return artist_name.encode("utf-8") + "_" + random_part + file_extension
+        return artist_name.decode("utf-8").encode("utf-8") + "_" + random_part + file_extension
 
     def path_safe(self, string):
         return string.replace(" ", "_")
@@ -252,6 +257,7 @@ class FetchPainting(threading.Thread):
             if len(problems) > 0:
                 print "Exiting for lack of metadata at %s" % (painting_url)
                 if LOG_REJECTED_PAINTINGS:
+                    metadata["problems"] = "~".join(problems)
                     self.rejected_lock.acquire()
                     self.csv_writer_rejected.writerow(metadata)
                     self.rejected_lock.release()
@@ -327,14 +333,17 @@ def main():
     successful_file = open("metadata.csv", "a+")
     rejected_file = open("failed.csv", "a+")
 
+    successful_file.write(u'\ufeff'.encode('utf8'))
+    rejected_file.write(u'\ufeff'.encode('utf8'))
+
     if download_images and not os.path.exists("images/"):
         os.makedirs("images/")
 
     # Needed to convert dictionary -> CSV
-    csv_writer_successful = csv.DictWriter(successful_file, csv_fields)
+    csv_writer_successful = csv.DictWriter(successful_file, csv_fields_successful)
     csv_writer_successful.writeheader()
 
-    csv_writer_rejected = csv.DictWriter(rejected_file, csv_fields)
+    csv_writer_rejected = csv.DictWriter(rejected_file, csv_fields_rejected)
     csv_writer_rejected.writeheader()
     time.sleep(0.5)
 
