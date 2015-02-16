@@ -358,8 +358,9 @@ def main():
         painting_thread.setDaemon(True)
         painting_thread.start()
 
-    painting_url_queue.join()
     category_url_queue.join()
+    painting_url_queue.join()
+
     successful_file.close()
     rejected_file.close() 
 
