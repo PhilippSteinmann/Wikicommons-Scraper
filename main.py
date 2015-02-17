@@ -1,4 +1,4 @@
-# Adapted from http://www.ibm.com/developerworks/aix/library/au-threadingpython/
+# Thanks to http://www.ibm.com/developerworks/aix/library/au-threadingpython/
 import Queue
 import threading
 import urllib2
@@ -16,26 +16,27 @@ from bs4 import BeautifulSoup
 NUM_CATEGORY_THREADS = 60
 NUM_PAINTING_THREADS = 60
 
+# It's useful to keep track of which paintings we reject because of bad metadata
 LOG_REJECTED_PAINTINGS = True
+
+# Anything later is rejected
 MAXIMUM_PAINTING_DATE = 1980
 
-# If file is greater, won't be downloaded
-# 20 MB
+# If file is greater, won't be downloaded. 20 MB
 MAX_FILE_SIZE = 20 * 1000 * 1000
 
-# URL to start out with
+# Should we care about file size? Slows down program
+LIMIT_FILE_SIZE = True
+
+# URL to start from
 initial_url = "http://commons.wikimedia.org/wiki/Category:1527_paintings"
 
-download_images = False
-
-# The order of fields that the CSV will be written in
-csv_fields_successful = ["artist", "title", "date", "medium", "dimensions", "categories", "file_name", "file_url", "description_url"]
-csv_fields_rejected = ["problems", "artist", "title", "date", "medium", "dimensions", "categories", "file_name", "file_url", "description_url"]
-
-# If the user specified URL, use that
+# If user specified own URL, use that
 if len(sys.argv) >= 2:
     initial_url = sys.argv[1]
 
+# If user specified image downloading, do so
+download_images = False
 if len(sys.argv) >= 3:
     if sys.argv[2] == "download":
         download_images = True
@@ -45,8 +46,14 @@ if len(sys.argv) >= 3:
         print "USAGE: python main.py <URL> <download/nodownload>"
         sys.exit()
 
-# This thread takes category_urls from category_url_queue and fetches & parses them
-# Adds new categories and paintings that it finds
+# The order of fields that the CSV will be written in
+csv_fields_successful = ["artist", "title", "date", "medium", "dimensions", "categories", "file_name", "file_url", "description_url"]
+csv_fields_rejected = ["problems", "artist", "title", "date", "medium", "dimensions", "categories", "file_name", "file_url", "description_url"]
+
+# This is the first of two types of threads found in this program
+# It takes a category_url from category_url_queue, fetches the HTML,
+# looks for (1) more category links and (2) painting links
+# Adds new categories to category_url_queue and paintings to painting_url_queue
 class FetchCategory(threading.Thread):
     def __init__(self, category_url_queue, painting_url_queue, category_urls_retrieved, category_urls_failed_to_retrieve):
         threading.Thread.__init__(self)
@@ -58,8 +65,11 @@ class FetchCategory(threading.Thread):
 
     # Parse page for category links
     def findOtherCategories(self, soup):
+        # Very easy
         category_links = soup.select("a.CategoryTreeLabel.CategoryTreeLabelNs14.CategoryTreeLabelCategory")
 
+        # Looking for a 'next 200' link is not so easy
+        # Look for element that contains string "next 200"
         next_page_regex = re.compile(r'next 200')
         next_page_navigable_string = soup.find(text=next_page_regex)
         if next_page_navigable_string != None:
@@ -67,15 +77,19 @@ class FetchCategory(threading.Thread):
             if next_page.name == "a":
                 category_links.append(next_page)
 
+        # Links in HTML are often relative, add the base_url to make them absolute
         links = [self.base_url + link["href"] for link in category_links]
         return links
 
     # Parse page for painting links
     def findPaintings(self, soup):
         painting_links = soup.select(".gallery.mw-gallery-traditional a.image")
+
+        # Links in HTML are often relative, add the base_url to make them absolute
         links = [self.base_url + link["href"] for link in painting_links]
         return links
 
+    # Main method of thread
     def run(self):
         while True:
             # Pop from queue
@@ -88,6 +102,7 @@ class FetchCategory(threading.Thread):
                 self.category_url_queue.task_done()
                 continue
 
+            # Add to array of categories already checked
             self.category_urls_retrieved.append(category_url)
 
             # Fetch HTML, feed to Beautiful Soup
@@ -104,25 +119,30 @@ class FetchCategory(threading.Thread):
                 self.category_url_queue.task_done()
                 continue
 
+            # Use Beautiful Soup 4 to analyze HTML
             soup = BeautifulSoup(html)
 
-            # Get list of categories and paintings as list
+            # Get list of categories and paintings as array
             categories_in_page = self.findOtherCategories(soup)
             paintings_in_page = self.findPaintings(soup)
 
-            # Put categories in page in categories queue
+            # Put new categories in categories queue
             for category in categories_in_page:
                 self.category_url_queue.put(category)
 
-            # Put paintings in page in paintings queue
+            # Put new paintings in paintings queue
             for painting in paintings_in_page:
                 self.painting_url_queue.put(painting)
 
+            # Very important statement. At bottom of program we do 
+            # `category_url_queue.join()`, which waits until all items in queue
+            # Have been task_done'd.
             self.category_url_queue.task_done()
 
 
-# This thread takes painting_urls from painting_url_queue and fetches them,
-# adds to metadata.csv, and downloads image file
+# This is the second of two types of threads found in this program
+# Takes painting URLs from painting_url_queue and fetches HTML, looks at metadata,
+# adds to metadata.csv, and downloads image file (if user wants to)
 class FetchPainting(threading.Thread):
     def __init__(self, painting_url_queue, successful_file, successful_lock, rejected_file, rejected_lock, painting_urls_retrieved, painting_urls_failed_to_retrieve, csv_writer_successful, csv_writer_rejected):
         threading.Thread.__init__(self)
@@ -136,17 +156,20 @@ class FetchPainting(threading.Thread):
         self.csv_writer_successful = csv_writer_successful
         self.csv_writer_rejected = csv_writer_rejected
 
+    # Important method, takes html and picks out metadata
+    # Looks for problems with metadata
     def readMetaData(self, html):
         soup = BeautifulSoup(html)
 
         metadata = { "artist": "", "title": "", "date": "", "medium": "", "dimensions": "", "file_url":""}
         problems = []
 
+        # The main metadata table.
         metadata_table = soup.select(".fileinfotpl-type-artwork")
         if len(metadata_table) == 0:
             problems.append("missing artwork table")
 
-        # Get all <spans> with ID "creator"
+        # Find artist: get all <spans> with ID "creator"
         artist_list = soup.select("span#creator")
         artist = ""
 
@@ -161,19 +184,21 @@ class FetchPainting(threading.Thread):
 
             metadata["artist"] = artist
 
+        # Not only do we require name of artist, we require link back to artist's
+        # Wikipedia page
         artist_wikipedia_link = soup.select("span#creator a")
         if artist != "Unkown" and len(artist_wikipedia_link) == 0:
             problems.append("missing artist wikipedia link")
 
 
-
-        # These fields are situated similarly in the HTML, so I made a single
+        # These four fields are situated similarly in the HTML, so I made a single
         # easy function to fetch them.
         metadata["date"] = self.readMetaDataField("#fileinfotpl_date", soup)
         metadata["title"] = self.readMetaDataField("#fileinfotpl_art_title", soup)
         metadata["medium"] = self.readMetaDataField("#fileinfotpl_art_medium", soup)
         metadata["dimensions"] = self.readMetaDataField("#fileinfotpl_art_dimensions", soup)
 
+        # If any field is missing, that's a problem
         if not metadata["date"]:
             problems.append("missing date")
         if not metadata["title"]:
@@ -183,12 +208,15 @@ class FetchPainting(threading.Thread):
         if not metadata["dimensions"]:
             problems.append("missing dimensions")
 
+        # Check if painting is too new
         if metadata["date"] and metadata["date"].isdigit() and int(metadata["date"]) > MAXIMUM_PAINTING_DATE:
             problems.append("too recent")
 
+        # Check if image is detail of painting
         if metadata["title"] and "(detail)" in metadata["title"]:
             problems.append("detail of painting")
 
+        # Look for link to the full image file
         file_url_regex = re.compile(r'Original file')
         file_url_navigable_string = soup.find(text= file_url_regex)
         if file_url_navigable_string != None:
@@ -208,7 +236,7 @@ class FetchPainting(threading.Thread):
         if soup.select("#mw_metadata .exif-make") and soup.select("#mw_metadata .exif-model"):
             problems.append("taken with camera")
 
-
+        # Look for list of categories that this painting belongs to
         category_links_list = soup.select("#catlinks #mw-normal-catlinks ul a")
         if len(category_links_list) > 0:
             category_names = [category.string for category in category_links_list]
@@ -217,6 +245,7 @@ class FetchPainting(threading.Thread):
 
         return (metadata, problems)
 
+    # Used to fetch date, title, dimensions, medium
     def readMetaDataField(self, sibling_field_id, soup):
         sibling_elem = soup.select(sibling_field_id)
         if len(sibling_elem) != 1 or sibling_elem[0].next_sibling == None:
@@ -226,7 +255,7 @@ class FetchPainting(threading.Thread):
         field_value = string.rstrip(field_value)
         return field_value
 
-
+    # Given metadata, create file name on disk
     def generateFileName(self, metadata):
         file_extension = metadata["file_url"][-4:]
         random_part = ''.join(random.choice(string.digits) for i in range(6))
@@ -237,15 +266,21 @@ class FetchPainting(threading.Thread):
 
         return artist_name.decode("utf-8").encode("utf-8") + "_" + random_part + file_extension
 
+    # Change spaces to underscores
     def path_safe(self, string):
         return string.replace(" ", "_")
 
+    # Remove protocol ambiguity
     def fix_file_url(self, url):
         if url[0:2] == "//":
             url = "http:" + url
         return url
 
+    # See how big image is
     def file_size_okay(self, file_url):
+        # If user doesn't care, don't check
+        if not LIMIT_FILE_SIZE:
+            return True
         try:
             file_site = urllib2.urlopen(file_url)
         except:
@@ -255,6 +290,7 @@ class FetchPainting(threading.Thread):
         file_size = int(file_size_header) if file_size_header.isdigit() else 0
         return file_size <= MAX_FILE_SIZE
 
+    # Main method of thread
     def run(self): 
         while True:
             # Pop from queue
@@ -267,7 +303,7 @@ class FetchPainting(threading.Thread):
                 self.painting_url_queue.task_done()
                 continue
 
-
+            # Fetch HTML
             try:
                 html = urllib2.urlopen(painting_url).read()
             except:
@@ -292,8 +328,10 @@ class FetchPainting(threading.Thread):
             file_url = metadata["file_url"]
             self.painting_urls_retrieved.append(file_url)
 
+            # Certain problems with the metadata are tolerable
             problems_that_are_okay = ["taken with camera"]
 
+            # Check if problems with metadata are tolerable
             if len(problems) > 0:
                 problems_are_okay = True
                 for problem in problems:
@@ -304,7 +342,6 @@ class FetchPainting(threading.Thread):
                 if not problems_are_okay:
 
                     print "Exiting for lack of metadata at %s" % (painting_url)
-
                     if LOG_REJECTED_PAINTINGS:
                         metadata["problems"] = "~".join(problems)
                         self.rejected_lock.acquire()
@@ -326,6 +363,7 @@ class FetchPainting(threading.Thread):
 
             metadata["file_name"] = "images/ " + file_name
 
+            # If user wants to download images, do so
             if download_images:
                 if self.file_size_okay(file_url):
                     try:
@@ -345,7 +383,7 @@ class FetchPainting(threading.Thread):
             self.painting_url_queue.task_done()
             print "Successfully fetched %s" % (painting_url)
 
-
+# No longer needed
 def removeDuplicates(queue):
     newQueue = Queue.Queue()
     items_in_queue = []
@@ -367,24 +405,31 @@ def main():
     # A queue containing painting pages to be scraped
     painting_url_queue = Queue.Queue()
 
+    # Used to prevent duplicates
     category_urls_retrieved = []
+
+    # Used to try again if HTTP request fails
     category_urls_failed_to_retrieve = []
 
-    # Keep track to prevent duplication
     print "=" * 50
     print "Spawning %d threads to search all categories..." % (NUM_CATEGORY_THREADS)
     print "=" * 50
     print
 
+    # Put initial URL to start things off
     category_url_queue.put(initial_url)
-    # Spawn a pool of threads, and pass them the queue instance
+
+    # Spawn a pool of threads
     for i in range(NUM_CATEGORY_THREADS):
         category_thread = FetchCategory(category_url_queue, painting_url_queue, category_urls_retrieved, category_urls_failed_to_retrieve)
         category_thread.setDaemon(True)
         category_thread.start()
 
 
+    # Used to prevent duplicates
     painting_urls_retrieved = []
+
+    # Used to try again if HTTP request fails
     painting_urls_failed_to_retrieve = []
 
     # Create lock for file
@@ -395,21 +440,27 @@ def main():
     successful_file = open("metadata.csv", "a+")
     rejected_file = open("failed.csv", "a+")
 
+    # Write BOM so that Excel can open
     successful_file.write(u'\ufeff'.encode('utf8'))
     rejected_file.write(u'\ufeff'.encode('utf8'))
 
+    # If user wants to download images, make sure directory exists
     if download_images and not os.path.exists("images/"):
         os.makedirs("images/")
 
-    if download_images and not os.path.exists("failed_images/"):
+    # If user wants to download rejected images, make sure directory exists
+    if download_images and LOG_REJECTED_PAINTINGS and not os.path.exists("failed_images/"):
         os.makedirs("failed_images/")
 
     # Needed to convert dictionary -> CSV
     csv_writer_successful = csv.DictWriter(successful_file, csv_fields_successful)
     csv_writer_successful.writeheader()
 
+    # Needed to convert dictionary -> CSV
     csv_writer_rejected = csv.DictWriter(rejected_file, csv_fields_rejected)
     csv_writer_rejected.writeheader()
+
+    # Fixes weird issues
     time.sleep(0.5)
 
     print
@@ -418,11 +469,15 @@ def main():
     print "=" * 50
     print
 
+    # Spawn a pool of threads
     for i in range(NUM_PAINTING_THREADS):
         painting_thread = FetchPainting(painting_url_queue, successful_file, successful_lock, rejected_file, rejected_lock, painting_urls_retrieved, painting_urls_failed_to_retrieve, csv_writer_successful, csv_writer_rejected)
         painting_thread.setDaemon(True)
         painting_thread.start()
 
+    # The statements below are important. Program will not progress beyond these
+    # two lines if both internal tickers don't reach 0. Tickers are incremented
+    # when you put something queue, decremented when you do task_done()
     category_url_queue.join()
     painting_url_queue.join()
 
