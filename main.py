@@ -181,6 +181,9 @@ class FetchPainting(threading.Thread):
         if metadata["date"] and metadata["date"].isdigit() and int(metadata["date"]) > MAXIMUM_PAINTING_DATE:
             problems.append("too recent")
 
+        if metadata["title"] and "(detail)" in metadata["title"]:
+            problems.append("detail of painting")
+
         file_url_regex = re.compile(r'Original file')
         file_url_navigable_string = soup.find(text= file_url_regex)
         if file_url_navigable_string != None:
