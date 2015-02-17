@@ -411,6 +411,21 @@ def main():
     # Used to try again if HTTP request fails
     category_urls_failed_to_retrieve = []
 
+    successful_file = open("metadata.csv", "a+")
+    rejected_file = open("failed.csv", "a+")
+
+    # Write BOM so that Excel can open
+    successful_file.write(u'\ufeff'.encode('utf8'))
+    rejected_file.write(u'\ufeff'.encode('utf8'))
+
+    # Needed to convert dictionary -> CSV
+    csv_writer_successful = csv.DictWriter(successful_file, csv_fields_successful)
+    csv_writer_successful.writeheader()
+
+    # Open CSV file for appending
+    # Needed to convert dictionary -> CSV
+    csv_writer_rejected = csv.DictWriter(rejected_file, csv_fields_rejected)
+    csv_writer_rejected.writeheader()
     print "=" * 50
     print "Spawning %d threads to search all categories..." % (NUM_CATEGORY_THREADS)
     print "=" * 50
@@ -436,13 +451,6 @@ def main():
     successful_lock = threading.Lock()
     rejected_lock = threading.Lock()
 
-    # Open CSV file for appending
-    successful_file = open("metadata.csv", "a+")
-    rejected_file = open("failed.csv", "a+")
-
-    # Write BOM so that Excel can open
-    successful_file.write(u'\ufeff'.encode('utf8'))
-    rejected_file.write(u'\ufeff'.encode('utf8'))
 
     # If user wants to download images, make sure directory exists
     if download_images and not os.path.exists("images/"):
@@ -452,13 +460,6 @@ def main():
     if download_images and LOG_REJECTED_PAINTINGS and not os.path.exists("failed_images/"):
         os.makedirs("failed_images/")
 
-    # Needed to convert dictionary -> CSV
-    csv_writer_successful = csv.DictWriter(successful_file, csv_fields_successful)
-    csv_writer_successful.writeheader()
-
-    # Needed to convert dictionary -> CSV
-    csv_writer_rejected = csv.DictWriter(rejected_file, csv_fields_rejected)
-    csv_writer_rejected.writeheader()
 
     # Fixes weird issues
     time.sleep(0.5)
