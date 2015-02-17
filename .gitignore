@@ -2,6 +2,7 @@
 *pyc
 test_output
 images/*
+failed_images/*
 metadata.csv
 failed.csv
 notes

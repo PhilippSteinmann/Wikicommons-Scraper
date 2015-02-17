@@ -192,6 +192,8 @@ class FetchPainting(threading.Thread):
 
             file_url = file_url_elem[0]["href"]
         file_url = self.fix_file_url(file_url)
+        metadata["file_url"] = file_url
+
         return (metadata, problems)
 
     def readMetaDataField(self, sibling_field_id, soup):
@@ -251,23 +253,33 @@ class FetchPainting(threading.Thread):
             # Read metadata from HTML
             metadata, problems = self.readMetaData(html)
             metadata["description_url"] = painting_url
+
             # Encode dictionary to UTF-8, because many works have special characters
             metadata = { k:(v.encode('utf8') if v else "") for k,v in metadata.items() }
 
+            file_name = self.generateFileName(metadata)
+            file_url = metadata["file_url"]
+            self.painting_urls_retrieved.append(file_url)
+
             if len(problems) > 0:
                 print "Exiting for lack of metadata at %s" % (painting_url)
+
                 if LOG_REJECTED_PAINTINGS:
                     metadata["problems"] = "~".join(problems)
                     self.rejected_lock.acquire()
                     self.csv_writer_rejected.writerow(metadata)
                     self.rejected_lock.release()
+
+                    if download_images and file_url:
+                        try:
+                            urllib.urlretrieve(file_url, "failed_images/" + file_name)
+                        except:
+                            print "Could not retrieve %s" % (file_url)
+
+
                 self.painting_url_queue.task_done()
                 continue
 
-            file_url = metadata["file_url"]
-            self.painting_urls_retrieved.append(file_url)
-
-            file_name = self.generateFileName(metadata)
             metadata["file_name"] = "images/ " + file_name
 
             if download_images:
@@ -338,6 +350,9 @@ def main():
 
     if download_images and not os.path.exists("images/"):
         os.makedirs("images/")
+
+    if download_images and not os.path.exists("failed_images/"):
+        os.makedirs("failed_images/")
 
     # Needed to convert dictionary -> CSV
     csv_writer_successful = csv.DictWriter(successful_file, csv_fields_successful)
