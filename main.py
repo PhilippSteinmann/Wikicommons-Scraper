@@ -194,6 +194,11 @@ class FetchPainting(threading.Thread):
         file_url = self.fix_file_url(file_url)
         metadata["file_url"] = file_url
 
+        # If two elements that are typical of photos are found, add that to problems
+        # Example: http://commons.wikimedia.org/wiki/File:Louvre-Lens_-_Galerie_du_Temps_(2013)_-_203_-_RF_129_(E)_(Freddy_Driel).JPG
+        if soup.select("#mw_metadata .exif-make") and soup.select("#mw_metadata .exif-model"):
+            problems.append("taken with camera")
+
         return (metadata, problems)
 
     def readMetaDataField(self, sibling_field_id, soup):
@@ -261,20 +266,30 @@ class FetchPainting(threading.Thread):
             file_url = metadata["file_url"]
             self.painting_urls_retrieved.append(file_url)
 
+            problems_that_are_okay = ["taken with camera"]
+
             if len(problems) > 0:
-                print "Exiting for lack of metadata at %s" % (painting_url)
+                problems_are_okay = True
+                for problem in problems:
+                    if not problem in problems_that_are_okay:
+                        problems_are_okay = False
+                        break
 
-                if LOG_REJECTED_PAINTINGS:
-                    metadata["problems"] = "~".join(problems)
-                    self.rejected_lock.acquire()
-                    self.csv_writer_rejected.writerow(metadata)
-                    self.rejected_lock.release()
+                if not problems_are_okay:
 
-                    if download_images and file_url:
-                        try:
-                            urllib.urlretrieve(file_url, "failed_images/" + file_name)
-                        except:
-                            print "Could not retrieve %s" % (file_url)
+                    print "Exiting for lack of metadata at %s" % (painting_url)
+
+                    if LOG_REJECTED_PAINTINGS:
+                        metadata["problems"] = "~".join(problems)
+                        self.rejected_lock.acquire()
+                        self.csv_writer_rejected.writerow(metadata)
+                        self.rejected_lock.release()
+
+                        if download_images and file_url:
+                            try:
+                                urllib.urlretrieve(file_url, "failed_images/" + file_name)
+                            except:
+                                print "Could not retrieve %s" % (file_url)
 
 
                 self.painting_url_queue.task_done()
