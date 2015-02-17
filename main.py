@@ -19,6 +19,10 @@ NUM_PAINTING_THREADS = 60
 LOG_REJECTED_PAINTINGS = True
 MAXIMUM_PAINTING_DATE = 1980
 
+# If file is greater, won't be downloaded
+# 20 MB
+MAX_FILE_SIZE = 20 * 1000 * 1000
+
 # URL to start out with
 initial_url = "http://commons.wikimedia.org/wiki/Category:1527_paintings"
 
@@ -241,6 +245,16 @@ class FetchPainting(threading.Thread):
             url = "http:" + url
         return url
 
+    def file_size_okay(self, file_url):
+        try:
+            file_site = urllib2.urlopen(file_url)
+        except:
+            return True
+        file_size_headers = file_site.info().getheaders("Content-Length")
+        file_size_header = file_size_headers[0] if len(file_size_headers) > 0 else "0"
+        file_size = int(file_size_header) if file_size_header.isdigit() else 0
+        return file_size <= MAX_FILE_SIZE
+
     def run(self): 
         while True:
             # Pop from queue
@@ -298,10 +312,13 @@ class FetchPainting(threading.Thread):
                         self.rejected_lock.release()
 
                         if download_images and file_url:
-                            try:
-                                urllib.urlretrieve(file_url, "failed_images/" + file_name)
-                            except:
-                                print "Could not retrieve %s" % (file_url)
+                            if self.file_size_okay(file_url):
+                                try:
+                                    urllib.urlretrieve(file_url, "failed_images/" + file_name)
+                                except:
+                                    print "Unable to download %s" % (file_url)
+                            else:
+                                print "Exiting because file too large at %s" % (file_url)
 
 
                 self.painting_url_queue.task_done()
@@ -310,8 +327,14 @@ class FetchPainting(threading.Thread):
             metadata["file_name"] = "images/ " + file_name
 
             if download_images:
-                # Write image file to images/ directory
-                urllib.urlretrieve(file_url, "images/" + file_name)
+                if self.file_size_okay(file_url):
+                    try:
+                        # Write image file to images/ directory
+                        urllib.urlretrieve(file_url, "images/" + file_name)
+                    except:
+                        print "Unable to download %s" % (file_url)
+                else:
+                    print "Exiting because file too large at %s" % (file_url)
 
             # Lock needed to prevent mess when multiple threads are writing
             # If lock is locked, will wait until released
