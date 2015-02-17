@@ -25,8 +25,8 @@ initial_url = "http://commons.wikimedia.org/wiki/Category:1527_paintings"
 download_images = False
 
 # The order of fields that the CSV will be written in
-csv_fields_successful = ["artist", "title", "date", "medium", "dimensions", "file_name", "file_url", "description_url"]
-csv_fields_rejected = ["problems", "artist", "title", "date", "medium", "dimensions", "file_name", "file_url", "description_url"]
+csv_fields_successful = ["artist", "title", "date", "medium", "dimensions", "categories", "file_name", "file_url", "description_url"]
+csv_fields_rejected = ["problems", "artist", "title", "date", "medium", "dimensions", "categories", "file_name", "file_url", "description_url"]
 
 # If the user specified URL, use that
 if len(sys.argv) >= 2:
@@ -162,6 +162,7 @@ class FetchPainting(threading.Thread):
             problems.append("missing artist wikipedia link")
 
 
+
         # These fields are situated similarly in the HTML, so I made a single
         # easy function to fetch them.
         metadata["date"] = self.readMetaDataField("#fileinfotpl_date", soup)
@@ -192,8 +193,9 @@ class FetchPainting(threading.Thread):
             file_url_elem = soup.select(".fullMedia a")
             if len(file_url_elem) == 0:
                 problems.append("missing file URL")
+            else:
+                file_url = file_url_elem[0]["href"]
 
-            file_url = file_url_elem[0]["href"]
         file_url = self.fix_file_url(file_url)
         metadata["file_url"] = file_url
 
@@ -201,6 +203,13 @@ class FetchPainting(threading.Thread):
         # Example: http://commons.wikimedia.org/wiki/File:Louvre-Lens_-_Galerie_du_Temps_(2013)_-_203_-_RF_129_(E)_(Freddy_Driel).JPG
         if soup.select("#mw_metadata .exif-make") and soup.select("#mw_metadata .exif-model"):
             problems.append("taken with camera")
+
+
+        category_links_list = soup.select("#catlinks #mw-normal-catlinks ul a")
+        if len(category_links_list) > 0:
+            category_names = [category.string for category in category_links_list]
+            categories_as_string = "~".join(category_names)
+            metadata["categories"] = categories_as_string
 
         return (metadata, problems)
 
