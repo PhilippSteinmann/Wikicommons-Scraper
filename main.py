@@ -25,6 +25,9 @@ MAXIMUM_PAINTING_DATE = 1980
 # If file is greater, won't be downloaded. 20 MB
 MAX_FILE_SIZE = 20 * 1000 * 1000
 
+# If file size is less, won't be downloaded. 40 KB
+MIN_FILE_SIZE = 40 * 1000
+
 # Should we care about file size? Slows down program
 LIMIT_FILE_SIZE = True
 
@@ -281,6 +284,7 @@ class FetchPainting(threading.Thread):
         # If user doesn't care, don't check
         if not LIMIT_FILE_SIZE:
             return True
+
         try:
             file_site = urllib2.urlopen(file_url)
         except:
@@ -288,7 +292,7 @@ class FetchPainting(threading.Thread):
         file_size_headers = file_site.info().getheaders("Content-Length")
         file_size_header = file_size_headers[0] if len(file_size_headers) > 0 else "0"
         file_size = int(file_size_header) if file_size_header.isdigit() else 0
-        return file_size <= MAX_FILE_SIZE
+        return (file_size <= MAX_FILE_SIZE and file_size >= MIN_FILE_SIZE)
 
     # Main method of thread
     def run(self): 
