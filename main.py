@@ -34,6 +34,11 @@ LIMIT_FILE_SIZE = True
 # URL to start from
 initial_url = "http://commons.wikimedia.org/wiki/Category:1527_paintings"
 
+# Used for testing, and to name files
+# First is successful, second is rejected
+# Using array because passing reference to threads is easy
+painting_counters = [0, 0]
+
 # If user specified own URL, use that
 if len(sys.argv) >= 2:
     initial_url = sys.argv[1]
@@ -147,7 +152,7 @@ class FetchCategory(threading.Thread):
 # Takes painting URLs from painting_url_queue and fetches HTML, looks at metadata,
 # adds to metadata.csv, and downloads image file (if user wants to)
 class FetchPainting(threading.Thread):
-    def __init__(self, painting_url_queue, successful_file, successful_lock, rejected_file, rejected_lock, painting_urls_retrieved, painting_urls_failed_to_retrieve, csv_writer_successful, csv_writer_rejected):
+    def __init__(self, painting_url_queue, successful_file, successful_lock, rejected_file, rejected_lock, painting_urls_retrieved, painting_urls_failed_to_retrieve, csv_writer_successful, csv_writer_rejected, painting_counters, painting_counter_lock):
         threading.Thread.__init__(self)
         self.painting_url_queue = painting_url_queue
         self.successful_file = successful_file
@@ -158,6 +163,8 @@ class FetchPainting(threading.Thread):
         self.painting_urls_failed_to_retrieve = painting_urls_failed_to_retrieve
         self.csv_writer_successful = csv_writer_successful
         self.csv_writer_rejected = csv_writer_rejected
+        self.painting_counters = painting_counters
+        self.painting_counter_lock = painting_counter_lock
 
     # Important method, takes html and picks out metadata
     # Looks for problems with metadata
@@ -259,15 +266,10 @@ class FetchPainting(threading.Thread):
         return field_value
 
     # Given metadata, create file name on disk
-    def generateFileName(self, metadata):
-        file_extension = metadata["file_url"][-4:]
-        random_part = ''.join(random.choice(string.digits) for i in range(6))
-        if metadata["artist"] == "" or not metadata["artist"] or "artist" not in metadata:
-            artist_name = "Unkown_Artist"
-        else:
-            artist_name = self.path_safe(metadata["artist"])
-
-        return artist_name.decode("utf-8").encode("utf-8") + "_" + random_part + file_extension
+    def generateFileName(self, metadata, image_number):
+        file_extension = os.path.splitext(metadata["file_url"])[1]
+        number_part = "{0:08d}".format(image_number)
+        return number_part + file_extension
 
     # Change spaces to underscores
     def path_safe(self, string):
@@ -299,7 +301,7 @@ class FetchPainting(threading.Thread):
         while True:
             # Pop from queue
             painting_url = self.painting_url_queue.get()
-            print "Painting #%d: Looking at %s" % (len(self.painting_urls_retrieved) + 1, painting_url)
+            print "Painting #%d: Looking at %s" % (self.painting_counters[0] + self.painting_counters[1], painting_url)
 
             # If we've retrieved image before, don't repeat
             if painting_url in self.painting_urls_retrieved:
@@ -328,7 +330,6 @@ class FetchPainting(threading.Thread):
             # Encode dictionary to UTF-8, because many works have special characters
             metadata = { k:(v.encode('utf8') if v else "") for k,v in metadata.items() }
 
-            file_name = self.generateFileName(metadata)
             file_url = metadata["file_url"]
             self.painting_urls_retrieved.append(file_url)
 
@@ -344,6 +345,13 @@ class FetchPainting(threading.Thread):
                         break
 
                 if not problems_are_okay:
+                    self.painting_counter_lock.acquire()
+                    self.painting_counters[1] += 1
+                    self.painting_counter_lock.release()
+
+                    this_number = self.painting_counters[1]
+                    file_name = self.generateFileName(metadata, this_number)
+                    metadata["file_name"] = "failed_images/ " + file_name
 
                     print "Exiting for lack of metadata at %s" % (painting_url)
                     if LOG_REJECTED_PAINTINGS:
@@ -362,9 +370,15 @@ class FetchPainting(threading.Thread):
                                 print "Exiting because file too large or small at %s" % (file_url)
 
 
-                self.painting_url_queue.task_done()
-                continue
+                    self.painting_url_queue.task_done()
+                    continue
 
+            self.painting_counter_lock.acquire()
+            self.painting_counters[0] += 1
+            self.painting_counter_lock.release()
+
+            this_number = self.painting_counters[0]
+            file_name = self.generateFileName(metadata, this_number)
             metadata["file_name"] = "images/ " + file_name
 
             # If user wants to download images, do so
@@ -451,9 +465,10 @@ def main():
     # Used to try again if HTTP request fails
     painting_urls_failed_to_retrieve = []
 
-    # Create lock for file
+    # Create locks
     successful_lock = threading.Lock()
     rejected_lock = threading.Lock()
+    painting_counter_lock = threading.Lock()
 
 
     # If user wants to download images, make sure directory exists
@@ -476,7 +491,7 @@ def main():
 
     # Spawn a pool of threads
     for i in range(NUM_PAINTING_THREADS):
-        painting_thread = FetchPainting(painting_url_queue, successful_file, successful_lock, rejected_file, rejected_lock, painting_urls_retrieved, painting_urls_failed_to_retrieve, csv_writer_successful, csv_writer_rejected)
+        painting_thread = FetchPainting(painting_url_queue, successful_file, successful_lock, rejected_file, rejected_lock, painting_urls_retrieved, painting_urls_failed_to_retrieve, csv_writer_successful, csv_writer_rejected, painting_counters, painting_counter_lock)
         painting_thread.setDaemon(True)
         painting_thread.start()
 
