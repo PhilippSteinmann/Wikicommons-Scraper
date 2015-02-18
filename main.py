@@ -359,7 +359,7 @@ class FetchPainting(threading.Thread):
                                 except:
                                     print "Unable to download %s" % (file_url)
                             else:
-                                print "Exiting because file too large at %s" % (file_url)
+                                print "Exiting because file too large or small at %s" % (file_url)
 
 
                 self.painting_url_queue.task_done()
@@ -376,7 +376,7 @@ class FetchPainting(threading.Thread):
                     except:
                         print "Unable to download %s" % (file_url)
                 else:
-                    print "Exiting because file too large at %s" % (file_url)
+                    print "Exiting because file too large or small at %s" % (file_url)
 
             # Lock needed to prevent mess when multiple threads are writing
             # If lock is locked, will wait until released
