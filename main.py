@@ -213,7 +213,7 @@ class FetchPainting(threading.Thread):
             problems.append("too recent")
 
         # Check if image is detail of painting
-        if metadata["title"] and "(detail)" in metadata["title"]:
+        if metadata["title"] and "detail" in metadata["title"]:
             problems.append("detail of painting")
 
         # Look for link to the full image file
