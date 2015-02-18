@@ -433,8 +433,8 @@ def main():
     rejected_file = open("failed.csv", "a+")
 
     # Write BOM so that Excel can open
-    successful_file.write(u'\ufeff'.encode('utf8'))
-    rejected_file.write(u'\ufeff'.encode('utf8'))
+    #successful_file.write(u'\ufeff'.encode('utf8'))
+    #rejected_file.write(u'\ufeff'.encode('utf8'))
 
     # Needed to convert dictionary -> CSV
     csv_writer_successful = csv.DictWriter(successful_file, csv_fields_successful)

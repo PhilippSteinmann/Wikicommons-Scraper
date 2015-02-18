@@ -1,9 +1,14 @@
+# -*- coding: utf-8 -*-
+
 import list_duplicate_files
 import csv
 import os
+import itertools
 
 PATHS_TO_CHECK = ["images/", "failed_images/"]
 FILE_FOR_DUPLICATES = "duplicates.csv"
+
+MIN_TITLE_SIMILARITY = 0.8
 
 # Check for files that are exactly the same
 def find_true_duplicates():
@@ -134,7 +139,97 @@ def delete_metadata(file_list, except_for=None):
 
 
 def find_likely_duplicates():
-    pass
+    print
+    print "Looking for likely duplicates..."
+    suspects = scan_metadata_for_suspects()
+    strong_suspects = scan_suspects_using_cv(suspects)
+    print "%d found." % (len(strong_suspects))
+    arrest_suspects(strong_suspects)
+
+def scan_metadata_for_suspects():
+    suspects = []
+    paintings = []
+
+    successful_obj = open("metadata.csv")
+    successful_metadata = csv.DictReader(successful_obj)
+    for painting in successful_metadata:
+        paintings.append(painting)
+    successful_obj.close()
+
+    rejected_obj = open("failed.csv")
+    rejected_metadata = csv.DictReader(rejected_obj)
+    for painting in rejected_metadata:
+        paintings.append(painting)
+    rejected_obj.close()
+
+
+    paintings = [normalized(painting) for painting in paintings]
+    paintings_by_artist = {}
+    for painting in paintings:
+        artist = painting["artist"]
+        if artist in paintings_by_artist:
+            paintings_by_artist[artist].append(painting)
+        else:
+            paintings_by_artist[artist] = [painting]
+
+    for artist, associated_paintings in paintings_by_artist.iteritems():
+        if len(associated_paintings) == 1:
+            continue
+        
+        for pair in itertools.combinations(associated_paintings, 2):
+            title_one, title_two = pair[0]["title"], pair[1]["title"]
+            if len(title_one) == 0 or len(title_two) == 0:
+                continue
+
+            longest_common_substring = find_longest_common_substring(title_one, title_two)
+            similarity = len(longest_common_substring) / min(len(title_one), len(title_two))
+
+            if similarity >= MIN_TITLE_SIMILARITY:
+                suspects.append((pair[0], pair[1]))
+
+    return suspects
+
+        
+# http://en.wikibooks.org/wiki/Algorithm_Implementation/Strings/Longest_common_substring#Python2
+def find_longest_common_substring(s1, s2):
+    m = [[0] * (1 + len(s2)) for i in xrange(1 + len(s1))]
+    longest, x_longest = 0, 0
+    for x in xrange(1, 1 + len(s1)):
+        for y in xrange(1, 1 + len(s2)):
+            if s1[x - 1] == s2[y - 1]:
+                m[x][y] = m[x - 1][y - 1] + 1
+                if m[x][y] > longest:
+                    longest = m[x][y]
+                    x_longest = x
+            else:
+                m[x][y] = 0
+    return s1[x_longest - longest: x_longest]
+
+def normalized(metadata):
+    artist = metadata["artist"]
+    artist = artist.lower()
+    artist = artist.replace(" ", "")
+
+    replacement_table = { ord(u"ä"): "a", ord(u"ü"): "u", ord(u"ö"): "o", ord(u"ß"): "ss", ord(u"é"): "e", ord(u"è"): "e", ord(u"à"): "a", ord(u"û"): "u", ord(u"ô"): "o"}
+    for index, letter in enumerate(artist):
+        if letter in replacement_table:
+            artist[index] = replacement_table[letter]
+
+    metadata["artist"] = artist
+    return metadata
+
+def scan_suspects_using_cv(suspects):
+    return suspects
+
+def arrest_suspects(strong_suspects):
+    duplicates_file = open(FILE_FOR_DUPLICATES, "a+")
+
+    for gang in strong_suspects:
+        file_paths = [suspect["file_name"] for suspect in gang]
+        string_representation = ",".join(file_paths)
+        duplicates_file.write(string_representation)
+
+    duplicates_file.close()
 
 def main():
     find_true_duplicates()
