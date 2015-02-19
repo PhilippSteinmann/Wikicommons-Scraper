@@ -1,3 +1,5 @@
+# -*- coding: utf-8 -*-
+
 # Thanks to http://www.ibm.com/developerworks/aix/library/au-threadingpython/
 import Queue
 import threading
@@ -55,8 +57,8 @@ if len(sys.argv) >= 3:
         sys.exit()
 
 # The order of fields that the CSV will be written in
-csv_fields_successful = ["artist", "title", "date", "medium", "dimensions", "categories", "file_name", "file_url", "description_url"]
-csv_fields_rejected = ["problems", "artist", "title", "date", "medium", "dimensions", "categories", "file_name", "file_url", "description_url"]
+csv_fields_successful = ["artist", "artist_normalized", "title", "date", "medium", "dimensions", "categories", "file_name", "file_url", "description_url"]
+csv_fields_rejected = ["problems", "artist", "artist_normalized", "title", "date", "medium", "dimensions", "categories", "file_name", "file_url", "description_url"]
 
 # This is the first of two types of threads found in this program
 # It takes a category_url from category_url_queue, fetches the HTML,
@@ -166,6 +168,28 @@ class FetchPainting(threading.Thread):
         self.painting_counters = painting_counters
         self.painting_counter_lock = painting_counter_lock
 
+    def normalized(self, artist):
+        artist = artist.lower()
+        artist = artist.replace("-", "")
+
+        artist_names = artist.split(" ")
+        if len(artist_names) >= 3:
+            artist = artist_names[0] + artist_names[-1]
+
+        artist = artist.replace(" ", "")
+        new_artist_str = ""
+
+        replacement_table = { ord(u"ä"): "a", ord(u"ü"): "u", ord(u"ö"): "o", ord(u"ß"): "ss", ord(u"é"): "e", ord(u"è"): "e", ord(u"à"): "a", ord(u"û"): "u", ord(u"ô"): "o"}
+        for letter in artist:
+            if ord(letter) in replacement_table:
+                new_artist_str += replacement_table[ord(letter)]
+            else:
+                new_artist_str += letter
+
+        artist = new_artist_str
+
+        return artist
+
     # Important method, takes html and picks out metadata
     # Looks for problems with metadata
     def readMetaData(self, html):
@@ -194,6 +218,8 @@ class FetchPainting(threading.Thread):
 
             metadata["artist"] = artist
 
+        metadata["artist_normalized"] = self.normalized(metadata["artist"])
+
         # Not only do we require name of artist, we require link back to artist's
         # Wikipedia page
         artist_wikipedia_link = soup.select("span#creator a")
@@ -211,12 +237,23 @@ class FetchPainting(threading.Thread):
         # If any field is missing, that's a problem
         if not metadata["date"]:
             problems.append("missing date")
+        else:
+            metadata["date"] = metadata["date"].replace("\n", " ")
+
         if not metadata["title"]:
             problems.append("missing title")
+        else:
+            metadata["title"] = metadata["title"].replace("\n", " ")
+
         if not metadata["medium"]:
             problems.append("missing medium")
+        else:
+            metadata["medium"] = metadata["medium"].replace("\n", " ")
+
         if not metadata["dimensions"]:
             problems.append("missing dimensions")
+        else:
+            metadata["dimensions"] = metadata["dimensions"].replace("\n", " ")
 
         # Check if painting is too new
         if metadata["date"] and metadata["date"].isdigit() and int(metadata["date"]) > MAXIMUM_PAINTING_DATE:
@@ -225,6 +262,7 @@ class FetchPainting(threading.Thread):
         # Check if image is detail of painting
         if metadata["title"] and "detail" in metadata["title"]:
             problems.append("detail of painting")
+
 
         # Look for link to the full image file
         file_url_regex = re.compile(r'Original file')
@@ -267,9 +305,13 @@ class FetchPainting(threading.Thread):
 
     # Given metadata, create file name on disk
     def generateFileName(self, metadata, image_number):
+        artist_name = metadata["artist_normalized"]
+        if not artist_name or len(artist_name) == 0:
+            artist_name = "unknown"
+
         file_extension = os.path.splitext(metadata["file_url"])[1]
         number_part = "{0:08d}".format(image_number)
-        return number_part + file_extension
+        return artist_name + "_" + number_part + file_extension
 
     # Change spaces to underscores
     def path_safe(self, string):

@@ -162,11 +162,12 @@ def scan_metadata_for_suspects():
         paintings.append(painting)
     rejected_obj.close()
 
+    # No longer necessary, artist names are normalized
+    #paintings = [normalized(painting) for painting in paintings]
 
-    paintings = [normalized(painting) for painting in paintings]
     paintings_by_artist = {}
     for painting in paintings:
-        artist = painting["artist"]
+        artist = painting["artist_normalized"]
         if artist in paintings_by_artist:
             paintings_by_artist[artist].append(painting)
         else:
@@ -205,6 +206,7 @@ def find_longest_common_substring(s1, s2):
                 m[x][y] = 0
     return s1[x_longest - longest: x_longest]
 
+# No longer necessary
 def normalized(metadata):
     artist = metadata["artist"]
     artist = artist.lower()
