@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 
 import list_duplicate_files
+from fuzzy_substring import *
 import csv
 import os
 import itertools
@@ -8,7 +9,8 @@ import itertools
 PATHS_TO_CHECK = ["images/", "failed_images/"]
 FILE_FOR_DUPLICATES = "duplicates.csv"
 
-MIN_TITLE_SIMILARITY = 0.8
+MIN_SUBSTRING_SIMILARITY = 0.8
+MAX_FUZZY_DISTANCE = 4
 
 # Check for files that are exactly the same
 def find_true_duplicates():
@@ -142,7 +144,7 @@ def find_likely_duplicates():
     print
     print "Looking for likely duplicates..."
     suspects = scan_metadata_for_suspects()
-    strong_suspects = scan_suspects_using_cv(suspects)
+    strong_suspects = scan_suspect_files(suspects)
     print "%d found." % (len(strong_suspects))
     arrest_suspects(strong_suspects)
 
@@ -183,9 +185,12 @@ def scan_metadata_for_suspects():
                 continue
 
             longest_common_substring = find_longest_common_substring(title_one, title_two)
-            similarity = len(longest_common_substring) / min(len(title_one), len(title_two))
+            normalizer = min(len(title_one), len(title_two))
 
-            if similarity >= MIN_TITLE_SIMILARITY:
+            similarity = len(longest_common_substring) / normalizer
+            fuzzy_distance = fuzzy_levenshtein_distance(title_one, title_two)
+
+            if similarity >= MIN_SUBSTRING_SIMILARITY or fuzzy_distance <= MAX_FUZZY_DISTANCE:
                 suspects.append((pair[0], pair[1]))
 
     return suspects
@@ -220,7 +225,7 @@ def normalized(metadata):
     metadata["artist"] = artist
     return metadata
 
-def scan_suspects_using_cv(suspects):
+def scan_suspect_files(suspects):
     return suspects
 
 def arrest_suspects(strong_suspects):

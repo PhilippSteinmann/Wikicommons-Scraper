@@ -34,7 +34,7 @@ MIN_FILE_SIZE = 40 * 1000
 LIMIT_FILE_SIZE = True
 
 # URL to start from
-initial_url = "http://commons.wikimedia.org/wiki/Category:1527_paintings"
+initial_url = "http://commons.wikimedia.org/wiki/Category:Paintings"
 
 # Used for testing, and to name files
 # First is successful, second is rejected
@@ -179,7 +179,7 @@ class FetchPainting(threading.Thread):
         artist = artist.replace(" ", "")
         new_artist_str = ""
 
-        replacement_table = { ord(u"ä"): "a", ord(u"ü"): "u", ord(u"ö"): "o", ord(u"ß"): "ss", ord(u"é"): "e", ord(u"è"): "e", ord(u"à"): "a", ord(u"û"): "u", ord(u"ô"): "o"}
+        replacement_table = { ord(u"ä"): "a", ord(u"ü"): "u", ord(u"ö"): "o", ord(u"ß"): "ss", ord(u"é"): "e", ord(u"è"): "e", ord(u"à"): "a", ord(u"á"): "a",  ord(u"û"): "u", ord(u"ô"): "o"}
         for letter in artist:
             if ord(letter) in replacement_table:
                 new_artist_str += replacement_table[ord(letter)]
@@ -494,10 +494,12 @@ def main():
     # Put initial URL to start things off
     category_url_queue.put(initial_url)
 
+    all_threads = []
     # Spawn a pool of threads
     for i in range(NUM_CATEGORY_THREADS):
         category_thread = FetchCategory(category_url_queue, painting_url_queue, category_urls_retrieved, category_urls_failed_to_retrieve)
         category_thread.setDaemon(True)
+        all_threads.append(category_thread)
         category_thread.start()
 
 
@@ -535,6 +537,7 @@ def main():
     for i in range(NUM_PAINTING_THREADS):
         painting_thread = FetchPainting(painting_url_queue, successful_file, successful_lock, rejected_file, rejected_lock, painting_urls_retrieved, painting_urls_failed_to_retrieve, csv_writer_successful, csv_writer_rejected, painting_counters, painting_counter_lock)
         painting_thread.setDaemon(True)
+        all_threads.append(painting_thread)
         painting_thread.start()
 
     # The statements below are important. Program will not progress beyond these
@@ -542,6 +545,14 @@ def main():
     # when you put something queue, decremented when you do task_done()
     category_url_queue.join()
     painting_url_queue.join()
+
+    try:
+        while sum([t.isAlive() for t in all_threads]):
+            pass
+    except KeyboardInterrupt:
+        print "Terminating..."
+        exit()
+
 
     successful_file.close()
     rejected_file.close() 

@@ -3,6 +3,8 @@
 test_output
 images/*
 failed_images/*
+duplicates/*
 metadata.csv
 failed.csv
+duplicates.csv
 notes
