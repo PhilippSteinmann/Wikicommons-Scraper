@@ -103,7 +103,9 @@ class FetchArtists(threading.Thread):
         artist_list = soup.select(".artists-columns a.highlight-link")
         for artist_elem in artist_list:
             artist_name = unicode(artist_elem.string)
-            artists_in_page.append(artist_name)
+            artist_url = artist_elem["href"]
+            artist = [artist_name, artist_url]
+            artists_in_page.append(artist)
 
         return artists_in_page
 
@@ -149,9 +151,14 @@ def get_artists(all_pages):
 def write_artists_to_file(artists):
     file_obj = open(OUTPUT_URL, "w+")
 
+    header = "name,url\n"
+
+    file_obj.write(header)
+
     for artist in artists:
-        artist = artist.encode("utf-8") + "\n"
-        file_obj.write(artist)
+        artist_string = ",".join(artist)
+        artist_string = artist_string.encode("utf-8") + "\n"
+        file_obj.write(artist_string)
 
     file_obj.close()
 
