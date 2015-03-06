@@ -1,11 +1,11 @@
 *swp
 *pyc
 test_output
-images/*
-failed_images/*
-duplicates/*
-metadata.csv
-failed.csv
-duplicates.csv
+recursive/images/*
+recursive/failed_images/*
+recursive/metadata.csv
+recursive/failed.csv
+duplicates/duplicates.csv
+duplicates/duplicates/*
 notes
 get_artist_list/artist_list.txt
