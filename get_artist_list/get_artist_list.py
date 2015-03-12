@@ -41,8 +41,9 @@ class FetchPageLength(threading.Thread):
 
             try:
                 html = urllib2.urlopen(letter_link).read()
-            except:
-                print letter_link
+            except Exception, e:
+                print "ERROR: " + letter_link
+                print e
                 self.letter_queue.put(letter_link)
                 self.letter_queue.task_done()
                 continue
@@ -78,7 +79,7 @@ def generate_all_pages(letter_links, page_lengths):
     all_pages = []
     pagination_base = "?page="
 
-    for i in range(25):
+    for i in range(26):
         letter = chr(ord("a") + i)
         base_url = letter_links[letter]
         page_length = page_lengths[letter]
