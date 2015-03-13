@@ -4,7 +4,8 @@ import urllib2
 from bs4 import BeautifulSoup
 
 NUM_THREADS = 30
-OUTPUT_URL = "artist_list.txt"
+OUTPUT_URL = "../data/artist_list.txt"
+SEPARATOR = "%"
 
 def get_link_for_each_letter():
     letter_links = {}
@@ -157,7 +158,7 @@ def write_artists_to_file(artists):
     file_obj.write(header)
 
     for artist in artists:
-        artist_string = ",".join(artist)
+        artist_string = SEPARATOR.join(artist)
         artist_string = artist_string.encode("utf-8") + "\n"
         file_obj.write(artist_string)
 
