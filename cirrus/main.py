@@ -81,6 +81,17 @@ class FetchPage(threading.Thread):
             self.offset_queue.put(current_offset)
             current_offset += WORKS_PER_PAGE
 
+    def make_dictionary(self, works, search_url):
+        works_old = works
+        works = []
+        for work in works_old:
+            work_dict = {}
+            work_dict["url"] = work
+            work_dict["search_url"] = search_url
+            works.append(work_dict)
+
+        return works
+
     def run(self):
         while True:
             offset = self.offset_queue.get()
@@ -96,6 +107,13 @@ class FetchPage(threading.Thread):
                 self.generate_other_offsets(page_length)
             else:
                 works = self.find_works(soup)
+
+            works = self.make_dictionary(works, url)
+            
+            self.write_lock.acquire()
+            for work in works:
+                self.csv_writer.writerow(work)
+            self.write_lock.release()
 
             self.offset_queue.task_done()
 
@@ -133,7 +151,7 @@ def run_all_threads(thread_sets):
     csv_writer.writeheader()
 
     for index, thread_set in enumerate(thread_sets):
-        print "Running thread #%d..." % (index + 1)
+        print "Running thread set #%d..." % (index + 1)
         run_thread_set(thread_set, csv_writer)
 
 def run_thread_set(thread_set, csv_writer):
