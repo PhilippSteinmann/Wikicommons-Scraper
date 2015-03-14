@@ -139,7 +139,13 @@ class FetchArtist(threading.Thread):
                 while True:
                     url = self.generate_url(base_url, page_number, medium)
                     json_str = self.fetch_json(url)
-                    works_raw = json.loads(json_str)
+
+                    try:
+                        works_raw = json.loads(json_str)
+                    except ValueError as e:
+                        print e
+                        continue
+
                     if not works_raw:
                         continue
 
