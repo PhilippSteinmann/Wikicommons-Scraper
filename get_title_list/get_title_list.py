@@ -11,9 +11,17 @@ NUM_THREADS = 30
 INPUT_FILE = "../data/artist_list.csv"
 OUTPUT_FILE = "../data/title_list.csv"
 XAPP_TOKEN = "JvTPWe4WsQO-xqX6Bts49qjIwrgaUqjiFZJCEm7fMvVUEorceDZTN2s0lz_XhIw6oOQhs0l2XQWey0f0w1Mg6DodbYChO0uV3NgmyNuF2pglVlFnhaa5Wol48sWtLswT2uAWdfQpxTa4oN_MBJsI5bu1oyHRDdvzXJw1UUZPqn1-rquuP_iJPSBrCmbVhkh4GIjG0p8CFVnGwyx1tR56K966y7JIQ4HULxihqbD4AF8="
+
+# Separator to use when parsing and when printing CSVs
 SEPARATOR = "%"
+
+# How many works per page to request
 WORKS_PER_PAGE = 60
+
+# Which mediums to filter with
 MEDIUMS = ["work-on-paper", "drawing", "prints", "photography"]
+
+# Order of CSV writing
 FIELDS = ["title", "id", "image_url", "year", "medium", "dimensions", "artist", "artist_birthday", "artist_nationality", "artist_id"]
 
 def read_artists():
@@ -37,25 +45,30 @@ class FetchArtist(threading.Thread):
         self.file_obj = file_obj
         self.write_lock = write_lock
 
+    # Given parameters, generate API request URL
     def generate_url(self, base_url, page_number, medium):
         return "https://api.artsy.net/api/v1/search/filtered" + base_url + "?medium=" + medium + "&size=" + str(WORKS_PER_PAGE) + "&page=" + str(page_number)
 
+    # Fetch JSON from given URL.
     def fetch_json(self, url):
         headers = { "X-XAPP-TOKEN": XAPP_TOKEN }
         request = urllib2.Request(url, None, headers)
         try:
             response = urllib2.urlopen(request)
         except (urllib2.URLError, httplib.BadStatusLine) as e:
+            # Try once more
             try:
                 print e
                 response = urllib2.urlopen(request)
             except (urllib2.URLError, httplib.BadStatusLine) as e:
+                # Give up
                 print e
                 print "FAILED URL: " + url
                 return None
 
         return response.read()
 
+    # Turn dictionary into format we need
     def clean_works(self, works_raw):
         works = []
         for work in works_raw:
@@ -77,6 +90,7 @@ class FetchArtist(threading.Thread):
         
         return works
 
+    # Look whether `field` exists. If yes, UTF-8-encode, if no, put placeholder string
     def add_field(self, field, name, work):
         if field == None:
             field = "none"
@@ -84,7 +98,8 @@ class FetchArtist(threading.Thread):
             field = field.encode("utf-8")
         work[name] = field
         return work
-        
+    
+    # Extract the image URL from response.
     def add_image_url(self, work, new_work):
         if not ("images" in work and 
                 len(work["images"]) > 0 and 
@@ -106,13 +121,14 @@ class FetchArtist(threading.Thread):
 
         return new_work
 
+    # Turn collected metadata for all works from artist into one long string (with linebreaks)
     def generate_string(self, works):
         string = ""
         for work in works:
             for field in FIELDS:
                 string += work[field] + SEPARATOR
 
-            string = string[:-2]
+            string = string[:-len(SEPARATOR)]
             string += "\n"
 
         string = string[:-2]
@@ -141,9 +157,11 @@ class FetchArtist(threading.Thread):
             print name
 
             for medium in MEDIUMS:
+                #print name + ": " + medium
                 page_number = 1
 
                 while True:
+                    #print name + ": " + medium + ": " + "page %d" % (page_number)
                     url = self.generate_url(base_url, page_number, medium)
                     json_str = self.fetch_json(url)
 
@@ -152,10 +170,10 @@ class FetchArtist(threading.Thread):
                     except ValueError as e:
                         print e
                         print "FAILED TO PARSE JSON: " + url
-                        continue
+                        break
 
                     if not works_raw:
-                        continue
+                        break
 
                     works = self.clean_works(works_raw)
                     self.write_works_to_file(works)
