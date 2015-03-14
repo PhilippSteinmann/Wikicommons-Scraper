@@ -9,3 +9,4 @@ duplicates/duplicates.csv
 duplicates/duplicates/*
 notes
 cirrus/*.csv
+data/title_list.csv

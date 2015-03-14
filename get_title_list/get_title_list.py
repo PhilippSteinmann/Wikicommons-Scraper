@@ -7,8 +7,8 @@ import json
 import sys
 
 NUM_THREADS = 30
-INPUT_FILE = "../data/artist_list.txt"
-OUTPUT_FILE = "../data/title_list.txt"
+INPUT_FILE = "../data/artist_list.csv"
+OUTPUT_FILE = "../data/title_list.csv"
 XAPP_TOKEN = "JvTPWe4WsQO-xqX6Bts49qjIwrgaUqjiFZJCEm7fMvVUEorceDZTN2s0lz_XhIw6oOQhs0l2XQWey0f0w1Mg6DodbYChO0uV3NgmyNuF2pglVlFnhaa5Wol48sWtLswT2uAWdfQpxTa4oN_MBJsI5bu1oyHRDdvzXJw1UUZPqn1-rquuP_iJPSBrCmbVhkh4GIjG0p8CFVnGwyx1tR56K966y7JIQ4HULxihqbD4AF8="
 SEPARATOR = "%"
 WORKS_PER_PAGE = 60
@@ -49,6 +49,7 @@ class FetchArtist(threading.Thread):
                 response = urllib2.urlopen(request)
             except urllib2.URLError:
                 print "Failed URL: " + url
+                return None
 
         return response.read()
 
@@ -85,7 +86,7 @@ class FetchArtist(threading.Thread):
         if not ("images" in work and 
                 len(work["images"]) > 0 and 
                 "image_versions" in work["images"][0] and 
-                work["images"][0]["image_verions"]):
+                work["images"][0]["image_versions"]):
             new_work = self.add_field(None, "image_url", new_work)
             return new_work
 
@@ -136,6 +137,9 @@ class FetchArtist(threading.Thread):
                     url = self.generate_url(base_url, page_number, medium)
                     json_str = self.fetch_json(url)
                     works_raw = json.loads(json_str)
+                    if not works_raw:
+                        continue
+
                     works = self.clean_works(works_raw)
                     self.write_works_to_file(works)
 
@@ -143,6 +147,8 @@ class FetchArtist(threading.Thread):
                         page_number += 1
                     else:
                         break
+
+            self.artist_queue.task_done()
 
 
 def write_header(file_obj):

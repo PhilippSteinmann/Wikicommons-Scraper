@@ -4,7 +4,7 @@ import urllib2
 from bs4 import BeautifulSoup
 
 NUM_THREADS = 30
-OUTPUT_URL = "../data/artist_list.txt"
+OUTPUT_URL = "../data/artist_list.csv"
 SEPARATOR = "%"
 
 def get_link_for_each_letter():
