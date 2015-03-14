@@ -131,7 +131,7 @@ class FetchArtist(threading.Thread):
             string = string[:-len(SEPARATOR)]
             string += "\n"
 
-        string = string[:-2]
+        string = string[:-1]
         return string
 
     def write_works_to_file(self, works):

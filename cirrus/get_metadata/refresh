@@ -1,0 +1,6 @@
+#!/bin/bash
+rm metadata.csv
+rm failed.csv
+rm images/*
+rm failed_images/*
+rm test_output
