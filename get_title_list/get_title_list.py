@@ -151,6 +151,7 @@ class FetchArtist(threading.Thread):
                         works_raw = json.loads(json_str)
                     except ValueError as e:
                         print e
+                        print "FAILED TO PARSE JSON: " + url
                         continue
 
                     if not works_raw:
