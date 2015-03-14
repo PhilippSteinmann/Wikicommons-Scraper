@@ -8,4 +8,4 @@ recursive/failed.csv
 duplicates/duplicates.csv
 duplicates/duplicates/*
 notes
-cirrus/cirrus.csv
+cirrus/*.csv

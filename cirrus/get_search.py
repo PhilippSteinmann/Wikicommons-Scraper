@@ -10,7 +10,7 @@ import re
 from bs4 import BeautifulSoup
 
 NUM_THREADS = 30
-FILE_NAME = "cirrus.csv"
+FILE_NAME = "search_results.csv"
 WORKS_PER_PAGE = 500
 
 class FetchPage(threading.Thread):
