@@ -130,7 +130,14 @@ class FetchArtist(threading.Thread):
     def run(self):
         while True:
             artist_raw = self.artist_queue.get()
-            name, base_url = artist_raw.split(SEPARATOR)
+            artist_split = artist_raw.split(SEPARATOR)
+
+            if len(artist_split) != 2:
+                print "FAULTY INPUT: " + artist_raw
+                self.artist_queue.task_done()
+                continue
+
+            name, base_url = artist_split
             print name
 
             for medium in MEDIUMS:
