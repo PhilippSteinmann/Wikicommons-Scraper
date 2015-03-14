@@ -82,6 +82,13 @@ class FetchArtist(threading.Thread):
         return work
         
     def add_image_url(self, work, new_work):
+        if not ("images" in work and 
+                len(work["images"]) > 0 and 
+                "image_versions" in work["images"][0] and 
+                work["images"][0]["image_verions"]):
+            new_work = self.add_field(None, "image_url", new_work)
+            return new_work
+
         if "larger" in work["images"][0]["image_versions"]:
             new_work = self.add_field(work["images"][0]["image_urls"]["larger"], "image_url", new_work)
         elif "large" in work["images"][0]["image_versions"]:
