@@ -5,6 +5,7 @@ import threading
 import urllib2 
 import json
 import sys
+import httplib
 
 NUM_THREADS = 30
 INPUT_FILE = "../data/artist_list.csv"
@@ -44,11 +45,13 @@ class FetchArtist(threading.Thread):
         request = urllib2.Request(url, None, headers)
         try:
             response = urllib2.urlopen(request)
-        except urllib2.URLError:
+        except (urllib2.URLError, httplib.BadStatusLine) as e:
             try:
+                print e
                 response = urllib2.urlopen(request)
-            except urllib2.URLError:
-                print "Failed URL: " + url
+            except (urllib2.URLError, httplib.BadStatusLine) as e:
+                print e
+                print "FAILED URL: " + url
                 return None
 
         return response.read()
@@ -180,3 +183,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
