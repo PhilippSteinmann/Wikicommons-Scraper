@@ -12,6 +12,7 @@ import csv
 import random
 import re
 import sys
+from urlparse import urlparse
 from bs4 import BeautifulSoup
 
 # A thread is a part of a program thar can run simultaneously with others
@@ -53,11 +54,24 @@ if len(sys.argv) >= 3:
     elif sys.argv[2] == "nodownload":
         download_images = False
     else:
-        print "USAGE: python main.py <URL> <download/nodownload>"
+        print "USAGE: python main.py <URL> <download/nodownload> <restrictive/permissive>"
         sys.exit()
 
+strictness = "permissive"
+if len(sys.argv) >= 4:
+    if sys.argv[3] == "strict" or sys.argv[3] == "permissive":
+        strictness = sys.argv[3]
+    else:
+        print "USAGE: python main.py <URL> <download/nodownload> <strict/permissive>"
+        sys.exit()
+
+if strictness == "strict":
+    problems_that_are_okay = ["taken with camera"]
+else:
+    problems_that_are_okay = ["taken with camera", "missing artwork table", "empty artist", "missing artist wikipedia link", "missing date", "missing title", "missing medium", "missing dimensions", "too recent", "detail of painting", "missing file URL"]
+
 # The order of fields that the CSV will be written in
-csv_fields_successful = ["artist", "artist_normalized", "title", "date", "medium", "dimensions", "categories", "file_name", "file_url", "description_url"]
+csv_fields_successful = ["problems", "artist", "artist_normalized", "title", "date", "medium", "dimensions", "categories", "file_name", "file_url", "description_url"]
 csv_fields_rejected = ["problems", "artist", "artist_normalized", "title", "date", "medium", "dimensions", "categories", "file_name", "file_url", "description_url"]
 
 # This is the first of two types of threads found in this program
@@ -71,12 +85,18 @@ class FetchCategory(threading.Thread):
         self.painting_url_queue = painting_url_queue
         self.category_urls_retrieved = category_urls_retrieved
         self.category_urls_failed_to_retrieve = category_urls_failed_to_retrieve
-        self.base_url = "http://commons.wikimedia.org" 
+
+    # http://stackoverflow.com/a/9626596/805556
+    def get_domain_name(self, url):
+        parsed_uri = urlparse(url)
+        domain = '{uri.scheme}://{uri.netloc}'.format(uri=parsed_uri)
+        return domain
 
     # Parse page for category links
-    def findOtherCategories(self, soup):
+    def findOtherCategories(self, soup, category_url):
         # Very easy
         category_links = soup.select("a.CategoryTreeLabel.CategoryTreeLabelNs14.CategoryTreeLabelCategory")
+        category_links += soup.select(".mw-category-group a")
 
         # Looking for a 'next 200' link is not so easy
         # Look for element that contains string "next 200"
@@ -88,15 +108,18 @@ class FetchCategory(threading.Thread):
                 category_links.append(next_page)
 
         # Links in HTML are often relative, add the base_url to make them absolute
-        links = [self.base_url + link["href"] for link in category_links]
+        base_url = self.get_domain_name(category_url)
+        links = [base_url + link["href"] for link in category_links]
         return links
 
     # Parse page for painting links
-    def findPaintings(self, soup):
+    def findPaintings(self, soup, category_url):
         painting_links = soup.select(".gallery.mw-gallery-traditional a.image")
+        painting_links += soup.select("table.infobox.vevent a.image")
 
         # Links in HTML are often relative, add the base_url to make them absolute
-        links = [self.base_url + link["href"] for link in painting_links]
+        base_url = self.get_domain_name(category_url)
+        links = [base_url + link["href"] for link in painting_links]
         return links
 
     # Main method of thread
@@ -133,8 +156,8 @@ class FetchCategory(threading.Thread):
             soup = BeautifulSoup(html)
 
             # Get list of categories and paintings as array
-            categories_in_page = self.findOtherCategories(soup)
-            paintings_in_page = self.findPaintings(soup)
+            categories_in_page = self.findOtherCategories(soup, category_url)
+            paintings_in_page = self.findPaintings(soup, category_url)
 
             # Put new categories in categories queue
             for category in categories_in_page:
@@ -380,6 +403,7 @@ class FetchPainting(threading.Thread):
 
             # Check if problems with metadata are tolerable
             if len(problems) > 0:
+                metadata["problems"] = "~".join(problems)
                 problems_are_okay = True
                 for problem in problems:
                     if not problem in self.problems_that_are_okay:
@@ -397,7 +421,6 @@ class FetchPainting(threading.Thread):
 
                     print "Exiting for lack of metadata at %s" % (painting_url)
                     if LOG_REJECTED_PAINTINGS:
-                        metadata["problems"] = "~".join(problems)
                         self.rejected_lock.acquire()
                         self.csv_writer_rejected.writerow(metadata)
                         self.rejected_lock.release()
@@ -533,7 +556,6 @@ def main():
     print "=" * 50
     print
 
-    problems_that_are_okay = ["taken with camera"]
     # Spawn a pool of threads
     for i in range(NUM_PAINTING_THREADS):
         painting_thread = FetchPainting(painting_url_queue, successful_file, successful_lock, rejected_file, rejected_lock, painting_urls_retrieved, painting_urls_failed_to_retrieve, csv_writer_successful, csv_writer_rejected, painting_counters, painting_counter_lock, problems_that_are_okay)
@@ -546,14 +568,6 @@ def main():
     # when you put something queue, decremented when you do task_done()
     category_url_queue.join()
     painting_url_queue.join()
-
-    try:
-        while sum([t.isAlive() for t in all_threads]):
-            pass
-    except KeyboardInterrupt:
-        print "Terminating..."
-        exit()
-
 
     successful_file.close()
     rejected_file.close() 
