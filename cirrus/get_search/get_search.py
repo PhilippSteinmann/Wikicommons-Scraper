@@ -123,8 +123,8 @@ def generate_all_threads():
 
     base_urls = ["http://commons.wikimedia.org/w/index.php", "http://en.wikipedia.org/w/index.php"]
     templates = ["artwork"]
-    search_parameters = ["oil OR etching OR tempera OR acrylic OR chalk OR charcoal OR pencil OR conté OR crayon OR gouache"]
-
+    search_parameters = ["oil OR painting OR canvas OR watercolor OR watercolour OR woodblock OR etching OR tempera OR acrylic OR chalk OR charcoal OR pencil OR graphite OR conté OR crayon OR gouache OR pastel"] #ink? pen? paper? vellum? photography?
+    
     for base_url in base_urls:
         for template in templates:
             for search_parameter in search_parameters:
