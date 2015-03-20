@@ -9,9 +9,9 @@ import csv
 import re
 from bs4 import BeautifulSoup
 
-NUM_THREADS = 30
+NUM_THREADS = 100
 FILE_NAME = "search_results.csv"
-WORKS_PER_PAGE = 500
+WORKS_PER_PAGE = 10000
 
 class FetchPage(threading.Thread):
     def __init__(self, base_url, template, search_parameters, write_lock):
