@@ -68,11 +68,11 @@ if len(sys.argv) >= 4:
 if strictness == "strict":
     problems_that_are_okay = ["taken with camera"]
 else:
-    problems_that_are_okay = ["taken with camera", "missing artwork table", "missing artist", "empty artist", "missing artist wikipedia link", "missing date", "missing title", "missing medium", "missing dimensions", "too recent", "detail of painting", "missing file URL"]
+    problems_that_are_okay = ["taken with camera", "missing artwork table", "missing artist", "empty artist", "missing artist wikipedia link", "missing date", "missing title", "missing medium", "missing dimensions", "missing current location", "too recent", "detail of painting", "missing file URL"]
 
 # The order of fields that the CSV will be written in
-csv_fields_successful = ["problems", "artist", "artist_normalized", "title", "date", "medium", "dimensions", "categories", "file_name", "file_url", "description_url"]
-csv_fields_rejected = ["problems", "artist", "artist_normalized", "title", "date", "medium", "dimensions", "categories", "file_name", "file_url", "description_url"]
+csv_fields_successful = ["problems", "artist", "artist_normalized", "title", "date", "medium", "dimensions", "current_location", "categories", "file_name", "file_url", "description_url"]
+csv_fields_rejected = ["problems", "artist", "artist_normalized", "title", "date", "medium", "dimensions", "current_location", "categories", "file_name", "file_url", "description_url"]
 
 # This is the first of two types of threads found in this program
 # It takes a category_url from category_url_queue, fetches the HTML,
@@ -257,6 +257,7 @@ class FetchPainting(threading.Thread):
         metadata["title"] = self.readMetaDataField("#fileinfotpl_art_title", soup)
         metadata["medium"] = self.readMetaDataField("#fileinfotpl_art_medium", soup)
         metadata["dimensions"] = self.readMetaDataField("#fileinfotpl_art_dimensions", soup)
+        metadata["current_location"] = self.readMetaDataField("#fileinfotpl_art_gallery", soup)
 
         # If any field is missing, that's a problem
         if not metadata["date"]:
@@ -278,6 +279,11 @@ class FetchPainting(threading.Thread):
             problems.append("missing dimensions")
         else:
             metadata["dimensions"] = metadata["dimensions"].replace("\n", " ")
+
+        if not metadata["current_location"]:
+            problems.append("missing current location")
+        else:
+            metadata["current_location"] = metadata["current_location"].replace("\n", " ")
 
         # Check if painting is too new
         if metadata["date"] and metadata["date"].isdigit() and int(metadata["date"]) > MAXIMUM_PAINTING_DATE:
@@ -320,8 +326,10 @@ class FetchPainting(threading.Thread):
     # Used to fetch date, title, dimensions, medium
     def readMetaDataField(self, sibling_field_id, soup):
         sibling_elem = soup.select(sibling_field_id)
+
         if len(sibling_elem) != 1 or sibling_elem[0].next_sibling == None:
             return False
+
         field_elem = sibling_elem[0].next_sibling.next_sibling
         field_value = ''.join(field_elem.findAll(text=True))
         field_value = string.rstrip(field_value)
