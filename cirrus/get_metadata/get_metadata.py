@@ -15,7 +15,7 @@ INPUT_FILE = "../get_search/search_results.csv"
 OUTPUT_FILE = "metadata.csv"
 SEPARATOR = ","
 
-csv_fields_successful = ["artist", "artist_normalized", "title", "date", "medium", "dimensions", "categories", "file_name", "file_url", "description_url"]
+csv_fields_successful = ["problems", "artist", "artist_normalized", "title", "date", "medium", "dimensions", "categories", "file_name", "file_url", "description_url"]
 csv_fields_rejected = ["problems", "artist", "artist_normalized", "title", "date", "medium", "dimensions", "categories", "file_name", "file_url", "description_url"]
 problems_that_are_okay = ["taken with camera"]
 
