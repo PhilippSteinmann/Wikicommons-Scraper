@@ -17,7 +17,7 @@ SEPARATOR = ","
 
 csv_fields_successful = ["problems", "artist", "artist_normalized", "title", "date", "medium", "dimensions", "categories", "file_name", "file_url", "description_url"]
 csv_fields_rejected = ["problems", "artist", "artist_normalized", "title", "date", "medium", "dimensions", "categories", "file_name", "file_url", "description_url"]
-problems_that_are_okay = ["taken with camera"]
+problems_that_are_okay = ["taken with camera","missing medium", "missing dimensions"]
 
 download_images = False
 if len(sys.argv) >= 2:
