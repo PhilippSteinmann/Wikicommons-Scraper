@@ -10,7 +10,7 @@ import httplib
 NUM_THREADS = 30
 INPUT_FILE = "../data/artist_list.csv"
 OUTPUT_FILE = "../data/title_list.csv"
-XAPP_TOKEN = "JvTPWe4WsQO-xqX6Bts49qjIwrgaUqjiFZJCEm7fMvVUEorceDZTN2s0lz_XhIw6oOQhs0l2XQWey0f0w1Mg6DodbYChO0uV3NgmyNuF2pglVlFnhaa5Wol48sWtLswT2uAWdfQpxTa4oN_MBJsI5bu1oyHRDdvzXJw1UUZPqn1-rquuP_iJPSBrCmbVhkh4GIjG0p8CFVnGwyx1tR56K966y7JIQ4HULxihqbD4AF8="
+XAPP_TOKEN = "JvTPWe4WsQO-xqX6Bts49sFSnD2IeEGFUyXNFr2WFXanXklysEW1CknT7WF2vn-c1u-m518NgeYeQrojCDZJzK3xHE45x0liCOeAH3yy01v-a-8dyJSs3xFpKTGbEh0RCg4aCjexJsgIgyofFXe_NeVRlYceHh5vTbZM1RXi6MXrnFqpzeR6UHOkRGVzlTVYNtbA-gSlxGoO9lgV0s-xpDxo9FinnIRwJzc_Opp1Ie0="
 
 # Separator to use when parsing and when printing CSVs
 SEPARATOR = "%"
@@ -167,7 +167,7 @@ class FetchArtist(threading.Thread):
 
                     try:
                         works_raw = json.loads(json_str)
-                    except ValueError as e:
+                    except (TypeError, ValueError) as e:
                         print e
                         print "FAILED TO PARSE JSON: " + url
                         break

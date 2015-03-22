@@ -68,7 +68,7 @@ if len(sys.argv) >= 4:
 if strictness == "strict":
     problems_that_are_okay = ["taken with camera"]
 else:
-    problems_that_are_okay = ["taken with camera", "missing artwork table", "empty artist", "missing artist wikipedia link", "missing date", "missing title", "missing medium", "missing dimensions", "too recent", "detail of painting", "missing file URL"]
+    problems_that_are_okay = ["taken with camera", "missing artwork table", "missing artist", "empty artist", "missing artist wikipedia link", "missing date", "missing title", "missing medium", "missing dimensions", "too recent", "detail of painting", "missing file URL"]
 
 # The order of fields that the CSV will be written in
 csv_fields_successful = ["problems", "artist", "artist_normalized", "title", "date", "medium", "dimensions", "categories", "file_name", "file_url", "description_url"]

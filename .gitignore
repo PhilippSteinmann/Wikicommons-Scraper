@@ -8,5 +8,5 @@ recursive/failed.csv
 duplicates/duplicates.csv
 duplicates/duplicates/*
 notes
-cirrus/*.csv
+cirrus/get_metadata/*.csv
 data/title_list.csv
