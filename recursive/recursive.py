@@ -68,13 +68,13 @@ if len(sys.argv) >= 4:
         sys.exit()
 
 if strictness == "strict":
-    problems_that_are_okay = ["taken with camera"]
+    problems_that_are_okay = ["taken with camera", "missing description"]
 else:
-    problems_that_are_okay = ["taken with camera", "missing artwork table", "missing artist", "empty artist", "missing artist wikipedia link", "missing date", "missing title", "missing medium", "missing dimensions", "missing current location", "too recent", "detail of painting", "missing file URL"]
+    problems_that_are_okay = ["taken with camera", "missing artwork table", "missing artist", "empty artist", "missing artist wikipedia link", "missing date", "missing description", "missing title", "missing medium", "missing dimensions", "missing current location", "too recent", "detail of painting", "missing file URL"]
 
 # The order of fields that the CSV will be written in
-csv_fields_successful = ["problems", "artist", "artist_normalized", "title", "date", "medium", "dimensions", "current_location", "categories", "file_name", "file_url", "description_url"]
-csv_fields_rejected = ["problems", "artist", "artist_normalized", "title", "date", "medium", "dimensions", "current_location", "categories", "file_name", "file_url", "description_url"]
+csv_fields_successful = ["problems", "artist", "artist_normalized", "title", "date", "description", "medium", "dimensions", "current_location", "categories", "file_name", "file_url", "description_url"]
+csv_fields_rejected = ["problems", "artist", "artist_normalized", "title", "date", "description", "medium", "dimensions", "current_location", "categories", "file_name", "file_url", "description_url"]
 
 category_blacklist = []
 
@@ -258,6 +258,7 @@ class FetchPainting(threading.Thread):
         # These four fields are situated similarly in the HTML, so I made a single
         # easy function to fetch them.
         metadata["date"] = self.readMetaDataField("#fileinfotpl_date", soup)
+        metadata["description"] = self.readMetaDataField("#fileinfotpl_desc", soup)
         metadata["title"] = self.readMetaDataField("#fileinfotpl_art_title", soup)
         metadata["medium"] = self.readMetaDataField("#fileinfotpl_art_medium", soup)
         metadata["dimensions"] = self.readMetaDataField("#fileinfotpl_art_dimensions", soup)
@@ -268,6 +269,11 @@ class FetchPainting(threading.Thread):
             problems.append("missing date")
         else:
             metadata["date"] = metadata["date"].replace("\n", " ")
+
+        if not metadata["description"]:
+            problems.append("missing description")
+        else:
+            metadata["description"] = metadata["description"].replace("\n", " ")
 
         if not metadata["title"]:
             problems.append("missing title")
