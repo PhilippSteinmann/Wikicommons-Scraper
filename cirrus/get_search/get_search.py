@@ -9,9 +9,9 @@ import csv
 import re
 from bs4 import BeautifulSoup
 
-NUM_THREADS = 30
+NUM_THREADS = 100
 FILE_NAME = "search_results.csv"
-WORKS_PER_PAGE = 500
+WORKS_PER_PAGE = 10000
 
 class FetchPage(threading.Thread):
     def __init__(self, base_url, template, search_parameters, write_lock):
@@ -123,8 +123,8 @@ def generate_all_threads():
 
     base_urls = ["http://commons.wikimedia.org/w/index.php", "http://en.wikipedia.org/w/index.php"]
     templates = ["artwork"]
-    search_parameters = ["oil OR etching OR tempera OR acrylic OR chalk OR charcoal OR pencil OR conté OR crayon OR gouache"]
-
+    search_parameters = ["oil OR painting OR canvas OR watercolor OR watercolour OR woodblock OR etching OR tempera OR acrylic OR chalk OR charcoal OR pencil OR graphite OR conté OR crayon OR gouache OR pastel"] #ink? pen? paper? vellum? photography?
+    
     for base_url in base_urls:
         for template in templates:
             for search_parameter in search_parameters:

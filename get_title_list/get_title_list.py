@@ -19,7 +19,7 @@ SEPARATOR = "%"
 WORKS_PER_PAGE = 60
 
 # Which mediums to filter with
-MEDIUMS = ["work-on-paper", "drawing", "prints", "photography"]
+MEDIUMS = ["painting", "work-on-paper", "drawing", "prints", "photography"]
 
 # Order of CSV writing
 FIELDS = ["title", "id", "image_url", "year", "medium", "dimensions", "artist", "artist_birthday", "artist_nationality", "artist_id"]
