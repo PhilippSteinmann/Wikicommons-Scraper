@@ -15,6 +15,8 @@ import sys
 from urlparse import urlparse
 from bs4 import BeautifulSoup
 
+SEPARATOR = "$&"
+
 # A thread is a part of a program thar can run simultaneously with others
 NUM_CATEGORY_THREADS = 60
 NUM_PAINTING_THREADS = 60
@@ -181,17 +183,15 @@ class FetchCategory(threading.Thread):
 # Takes painting URLs from painting_url_queue and fetches HTML, looks at metadata,
 # adds to metadata.csv, and downloads image file (if user wants to)
 class FetchPainting(threading.Thread):
-    def __init__(self, painting_url_queue, successful_file, successful_lock, rejected_file, rejected_lock, painting_urls_retrieved, painting_urls_failed_to_retrieve, csv_writer_successful, csv_writer_rejected, painting_counters, painting_counter_lock, problems_that_are_okay):
+    def __init__(self, painting_url_queue, successful_lock, rejected_lock, painting_urls_retrieved, painting_urls_failed_to_retrieve, file_successful, file_rejected, painting_counters, painting_counter_lock, problems_that_are_okay):
         threading.Thread.__init__(self)
         self.painting_url_queue = painting_url_queue
-        self.successful_file = successful_file
         self.successful_lock = successful_lock
-        self.rejected_file = rejected_file
         self.rejected_lock = rejected_lock
         self.painting_urls_retrieved = painting_urls_retrieved
         self.painting_urls_failed_to_retrieve = painting_urls_failed_to_retrieve
-        self.csv_writer_successful = csv_writer_successful
-        self.csv_writer_rejected = csv_writer_rejected
+        self.file_successful = file_successful
+        self.file_rejected = file_rejected
         self.painting_counters = painting_counters
         self.painting_counter_lock = painting_counter_lock
         self.problems_that_are_okay = problems_that_are_okay
@@ -374,6 +374,24 @@ class FetchPainting(threading.Thread):
         file_size = int(file_size_header) if file_size_header.isdigit() else 0
         return (file_size <= MAX_FILE_SIZE and file_size >= MIN_FILE_SIZE)
 
+    def generate_csv(self, metadata, fields):
+        string = ""
+
+        for field in fields:
+            if field not in metadata:
+                raise Exception("metadata doesn't contain field " + field)
+            
+            value = metadata[field]
+
+            # If separator is found in field value, replace with spaces
+            value = value.replace(SEPARATOR, " " * len(SEPARATOR))
+            string += SEPARATOR + value
+
+        string = string[len(SEPARATOR):]
+        string += "\n"
+        return string
+
+
     # Main method of thread
     def run(self): 
         while True:
@@ -414,8 +432,8 @@ class FetchPainting(threading.Thread):
             # Certain problems with the metadata are tolerable
 
             # Check if problems with metadata are tolerable
+            metadata["problems"] = "~".join(problems)
             if len(problems) > 0:
-                metadata["problems"] = "~".join(problems)
                 problems_are_okay = True
                 for problem in problems:
                     if not problem in self.problems_that_are_okay:
@@ -433,8 +451,9 @@ class FetchPainting(threading.Thread):
 
                     print "Exiting for lack of metadata at %s" % (painting_url)
                     if LOG_REJECTED_PAINTINGS:
+                        csv_string = self.generate_csv(metadata, csv_fields_rejected)
                         self.rejected_lock.acquire()
-                        self.csv_writer_rejected.writerow(metadata)
+                        self.file_rejected.write(csv_string)
                         self.rejected_lock.release()
 
                         if download_images and file_url:
@@ -471,8 +490,9 @@ class FetchPainting(threading.Thread):
 
             # Lock needed to prevent mess when multiple threads are writing
             # If lock is locked, will wait until released
+            csv_string = self.generate_csv(metadata, csv_fields_successful)
             self.successful_lock.acquire()
-            self.csv_writer_successful.writerow(metadata)
+            self.file_successful.write(csv_string)
             self.successful_lock.release()
 
             self.painting_url_queue.task_done()
@@ -493,6 +513,10 @@ def removeDuplicates(queue):
 
     return newQueue
 
+def write_header(file_obj, fields):
+    string = SEPARATOR.join(fields)
+    file_obj.write(string)
+
 def main():
     # A queue containing category pages to be scraped
     category_url_queue = Queue.Queue()
@@ -506,21 +530,24 @@ def main():
     # Used to try again if HTTP request fails
     category_urls_failed_to_retrieve = []
 
-    successful_file = open("metadata.csv", "a+")
-    rejected_file = open("failed.csv", "a+")
+    file_successful = open("metadata.csv", "a+")
+    file_rejected = open("failed.csv", "a+")
+    write_header(file_successful, csv_fields_successful)
+    write_header(file_rejected, csv_fields_rejected)
 
     # Write BOM so that Excel can open
     #successful_file.write(u'\ufeff'.encode('utf8'))
     #rejected_file.write(u'\ufeff'.encode('utf8'))
 
     # Needed to convert dictionary -> CSV
-    csv_writer_successful = csv.DictWriter(successful_file, csv_fields_successful)
-    csv_writer_successful.writeheader()
+    #csv_writer_successful = csv.DictWriter(successful_file, csv_fields_successful)
+    #csv_writer_successful.writeheader()
 
     # Open CSV file for appending
     # Needed to convert dictionary -> CSV
-    csv_writer_rejected = csv.DictWriter(rejected_file, csv_fields_rejected)
-    csv_writer_rejected.writeheader()
+    # csv_writer_rejected = csv.DictWriter(rejected_file, csv_fields_rejected)
+    # csv_writer_rejected.writeheader()
+
     print "=" * 50
     print "Spawning %d threads to search all categories..." % (NUM_CATEGORY_THREADS)
     print "=" * 50
@@ -570,7 +597,7 @@ def main():
 
     # Spawn a pool of threads
     for i in range(NUM_PAINTING_THREADS):
-        painting_thread = FetchPainting(painting_url_queue, successful_file, successful_lock, rejected_file, rejected_lock, painting_urls_retrieved, painting_urls_failed_to_retrieve, csv_writer_successful, csv_writer_rejected, painting_counters, painting_counter_lock, problems_that_are_okay)
+        painting_thread = FetchPainting(painting_url_queue, successful_lock, rejected_lock, painting_urls_retrieved, painting_urls_failed_to_retrieve, file_successful, file_rejected, painting_counters, painting_counter_lock, problems_that_are_okay)
         painting_thread.setDaemon(True)
         all_threads.append(painting_thread)
         painting_thread.start()

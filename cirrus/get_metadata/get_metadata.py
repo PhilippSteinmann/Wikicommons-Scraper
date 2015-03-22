@@ -13,7 +13,9 @@ import recursive
 NUM_THREADS = 30
 INPUT_FILE = "../get_search/search_results.csv"
 OUTPUT_FILE = "metadata.csv"
-SEPARATOR = ","
+
+INPUT_SEPARATOR = ","
+SEPARATOR = "$&"
 
 csv_fields_successful = ["problems", "artist", "artist_normalized", "title", "date", "medium", "dimensions", "categories", "file_name", "file_url", "description_url"]
 csv_fields_rejected = ["problems", "artist", "artist_normalized", "title", "date", "medium", "dimensions", "categories", "file_name", "file_url", "description_url"]
@@ -38,7 +40,7 @@ def read_urls():
     urls = urls[1:]
     for url in urls:
         url = url.strip("\n")
-        url_split = url.split(SEPARATOR)
+        url_split = url.split(INPUT_SEPARATOR)
         if len(url_split) != 2:
             continue
 
@@ -69,14 +71,14 @@ def fetch_metadata(urls_queue):
     painting_urls_failed_to_retrieve = []
     painting_counters = [0, 0]
 
-    successful_file = open("metadata.csv", "a+")
-    rejected_file = open("failed.csv", "a+")
+    file_successful = open("metadata.csv", "a+")
+    file_rejected = open("failed.csv", "a+")
 
-    csv_writer_successful = csv.DictWriter(successful_file, csv_fields_successful)
-    csv_writer_successful.writeheader()
+    #csv_writer_successful = csv.DictWriter(successful_file, csv_fields_successful)
+    #csv_writer_successful.writeheader()
 
-    csv_writer_rejected = csv.DictWriter(rejected_file, csv_fields_rejected)
-    csv_writer_rejected.writeheader()
+    #csv_writer_rejected = csv.DictWriter(rejected_file, csv_fields_rejected)
+    #csv_writer_rejected.writeheader()
 
     # Create locks
     successful_lock = threading.Lock()
@@ -93,7 +95,7 @@ def fetch_metadata(urls_queue):
         os.makedirs("failed_images/")
 
     for i in range(NUM_THREADS):
-        painting_thread = recursive.FetchPainting(urls_queue, successful_file, successful_lock, rejected_file, rejected_lock, painting_urls_retrieved, painting_urls_failed_to_retrieve, csv_writer_successful, csv_writer_rejected, painting_counters, painting_counter_lock, problems_that_are_okay)
+        painting_thread = recursive.FetchPainting(urls_queue, successful_lock, rejected_lock, painting_urls_retrieved, painting_urls_failed_to_retrieve, file_successful, file_rejected, painting_counters, painting_counter_lock, problems_that_are_okay)
         painting_thread.setDaemon(True)
         painting_thread.start()
 
