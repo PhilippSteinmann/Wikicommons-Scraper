@@ -74,6 +74,8 @@ else:
 csv_fields_successful = ["problems", "artist", "artist_normalized", "title", "date", "medium", "dimensions", "current_location", "categories", "file_name", "file_url", "description_url"]
 csv_fields_rejected = ["problems", "artist", "artist_normalized", "title", "date", "medium", "dimensions", "current_location", "categories", "file_name", "file_url", "description_url"]
 
+category_blacklist = []
+
 # This is the first of two types of threads found in this program
 # It takes a category_url from category_url_queue, fetches the HTML,
 # looks for (1) more category links and (2) painting links
@@ -109,7 +111,9 @@ class FetchCategory(threading.Thread):
 
         # Links in HTML are often relative, add the base_url to make them absolute
         base_url = self.get_domain_name(category_url)
-        links = [base_url + link["href"] for link in category_links]
+
+        links = [link for link in category_links if link.string not in category_blacklist]
+        links = [base_url + link["href"] for link in links]
         return links
 
     # Parse page for painting links
