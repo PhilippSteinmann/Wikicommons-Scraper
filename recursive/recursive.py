@@ -73,8 +73,8 @@ else:
     problems_that_are_okay = ["taken with camera", "missing artwork table", "missing artist", "empty artist", "missing artist wikipedia link", "missing date", "missing description", "missing title", "missing medium", "missing dimensions", "missing current location", "too recent", "detail of painting", "missing file URL"]
 
 # The order of fields that the CSV will be written in
-csv_fields_successful = ["problems", "artist", "artist_normalized", "title", "date", "description", "medium", "dimensions", "current_location", "categories", "file_name", "file_url", "description_url"]
-csv_fields_rejected = ["problems", "artist", "artist_normalized", "title", "date", "description", "medium", "dimensions", "current_location", "categories", "file_name", "file_url", "description_url"]
+csv_fields_successful = ["problems", "artist", "artist_normalized", "title", "date", "description", "medium", "dimensions", "current_location", "categories", "file_name", "file_url", "description_url", "metadata_dump"]
+csv_fields_rejected = ["problems", "artist", "artist_normalized", "title", "date", "description", "medium", "dimensions", "current_location", "categories", "file_name", "file_url", "description_url", "metadata_dump"]
 
 category_blacklist = []
 
@@ -330,6 +330,15 @@ class FetchPainting(threading.Thread):
             category_names = [category.string for category in category_links_list]
             categories_as_string = "~".join(category_names)
             metadata["categories"] = categories_as_string
+
+
+        content_element = soup.select("#content")[0]
+        entire_text = ''.join(content_element.findAll(text=True))
+        entire_text = entire_text.replace("\n\n\n", " ")
+        entire_text = entire_text.replace("\n\n", " ")
+        entire_text = entire_text.replace("\n", " ")
+        entire_text = entire_text.replace("\t", " ")
+        metadata["metadata_dump"] = entire_text
 
         return (metadata, problems)
 
