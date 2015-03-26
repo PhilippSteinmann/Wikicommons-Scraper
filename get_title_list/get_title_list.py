@@ -22,7 +22,7 @@ WORKS_PER_PAGE = 60
 MEDIUMS = ["painting", "work-on-paper", "drawing", "prints", "photography"]
 
 # Order of CSV writing
-FIELDS = ["title", "id", "image_url", "year", "medium", "dimensions", "artist", "artist_birthday", "artist_nationality", "artist_id"]
+FIELDS = ["title", "id", "image_url", "year", "medium", "dimensions", "category", "artist", "artist_birthday", "artist_nationality", "artist_id"]
 
 def read_artists():
     file_obj = open(INPUT_FILE)
@@ -81,6 +81,7 @@ class FetchArtist(threading.Thread):
             new_work = self.add_field(work["date"], "year", new_work)
             new_work = self.add_field(work["medium"], "medium", new_work)
             new_work = self.add_field(work["dimensions"]["in"], "dimensions", new_work)
+            new_work = self.add_field(work["category"], "category", new_work)
             new_work = self.add_field(work["artist"]["name"], "artist", new_work)
             new_work = self.add_field(work["artist"]["birthday"], "artist_birthday", new_work)
             new_work = self.add_field(work["artist"]["nationality"], "artist_nationality", new_work)
