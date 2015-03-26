@@ -236,7 +236,12 @@ class FetchPainting(threading.Thread):
         artist = ""
 
         if len(artist_list) == 0:
-            problems.append("missing artist")
+            # Try different method
+            metadata["artist"] = self.readMetaDataField("#fileinfotpl_aut", soup)
+
+            # If both methods have failed:
+            if not metadata["artist"]:
+                problems.append("missing artist")
 
         else:
             artist = artist_list[0].string
@@ -330,6 +335,8 @@ class FetchPainting(threading.Thread):
             category_names = [category.string for category in category_links_list]
             categories_as_string = "~".join(category_names)
             metadata["categories"] = categories_as_string
+        else:
+            metadata["categories"] = ""
 
 
         content_element = soup.select("#content")[0]
@@ -529,7 +536,7 @@ def removeDuplicates(queue):
     return newQueue
 
 def write_header(file_obj, fields):
-    string = SEPARATOR.join(fields)
+    string = SEPARATOR.join(fields) + "\n"
     file_obj.write(string)
 
 def main():
