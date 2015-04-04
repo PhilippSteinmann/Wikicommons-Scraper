@@ -10,7 +10,7 @@ import httplib
 NUM_THREADS = 30
 INPUT_FILE = "../data/artist_list.csv"
 OUTPUT_FILE = "../data/title_list.csv"
-XAPP_TOKEN = "JvTPWe4WsQO-xqX6Bts49sFSnD2IeEGFUyXNFr2WFXanXklysEW1CknT7WF2vn-c1u-m518NgeYeQrojCDZJzK3xHE45x0liCOeAH3yy01v-a-8dyJSs3xFpKTGbEh0RCg4aCjexJsgIgyofFXe_NeVRlYceHh5vTbZM1RXi6MXrnFqpzeR6UHOkRGVzlTVYNtbA-gSlxGoO9lgV0s-xpDxo9FinnIRwJzc_Opp1Ie0="
+XAPP_TOKEN = "JvTPWe4WsQO-xqX6Bts49nTqNSFJt70Gq74yNrstrihK_lL53aaVs3fbWRlnTA9evHsoYynWPz5in2MY5IBhuoxaqXlxh_cDV8ThHwxDBILY9RjROQUQK0KoMksobvaJorW9WvBRcZb6L8Tal96Ue-WvbQJ367lnLA77uQ1f82xCp-g8XkZ2felvikCzcM4vCmmQtz713z56YRFNMTpr4F8ihrDR6eS-mpdeov53N9w="
 
 # Separator to use when parsing and when printing CSVs
 SEPARATOR = "%"
