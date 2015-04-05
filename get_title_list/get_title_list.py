@@ -55,24 +55,16 @@ class FetchArtist(threading.Thread):
         request = urllib2.Request(url, None, headers)
         try:
             response = urllib2.urlopen(request)
-        except (urllib2.URLError, httplib.BadStatusLine) as e:
+        except Exception as e:
             # Try once more
             try:
                 print e
                 response = urllib2.urlopen(request)
-            except (urllib2.URLError, httplib.BadStatusLine) as e:
+            except Exception as e:
                 # Give up
                 print e
                 print "FAILED URL: " + url
                 return None
-
-            except Exception as e:
-                print e
-                return
-
-        except Exception as e:
-            print e
-            return
 
         return response.read()
 
