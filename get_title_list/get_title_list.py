@@ -66,6 +66,14 @@ class FetchArtist(threading.Thread):
                 print "FAILED URL: " + url
                 return None
 
+            except Exception as e:
+                print e
+                return
+
+        except Exception as e:
+            print e
+            return
+
         return response.read()
 
     # Turn dictionary into format we need
