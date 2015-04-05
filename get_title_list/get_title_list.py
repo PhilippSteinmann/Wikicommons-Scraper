@@ -127,13 +127,13 @@ class FetchArtist(threading.Thread):
         string = ""
         for work in works:
             for field in FIELDS:
-                string += work[field] + SEPARATOR
+                string += work[field].replace("\n","") + SEPARATOR
 
             string = string[:-len(SEPARATOR)]
             string += "\n"
 
-        string = string[:-1]
-        return string
+        #string = string[:-1]
+        return string.replace("\t","")
 
     def write_works_to_file(self, works):
         if len(works) == 0:
