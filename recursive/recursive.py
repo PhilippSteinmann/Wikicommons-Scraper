@@ -27,14 +27,9 @@ LOG_REJECTED_PAINTINGS = True
 # Anything later is rejected
 MAXIMUM_PAINTING_DATE = 1980
 
-# If file is greater, won't be downloaded. 20 MB
-MAX_FILE_SIZE = 20 * 1000 * 1000
-
-# If file size is less, won't be downloaded. 40 KB
-MIN_FILE_SIZE = 40 * 1000
-
-# Should we care about file size? Slows down program
-LIMIT_FILE_SIZE = True
+# We'll try to find an image that's between these two sizes, as large as possible.
+MAX_IMAGE_AREA = 2000 * 2000
+MIN_IMAGE_AREA = 200 * 200;
 
 # URL to start from
 initial_url = "http://commons.wikimedia.org/wiki/Category:Paintings"
@@ -308,21 +303,7 @@ class FetchPainting(threading.Thread):
         if metadata["title"] and "detail" in metadata["title"]:
             problems.append("detail of painting")
 
-
-        # Look for link to the full image file
-        file_url_regex = re.compile(r'Original file')
-        file_url_navigable_string = soup.find(text= file_url_regex)
-        if file_url_navigable_string != None:
-            file_url = file_url_navigable_string.parent["href"]
-        else:
-            file_url_elem = soup.select(".fullMedia a")
-            if len(file_url_elem) == 0:
-                problems.append("missing file URL")
-            else:
-                file_url = file_url_elem[0]["href"]
-
-        file_url = self.fix_file_url(file_url)
-        metadata["file_url"] = file_url
+        metadata["file_url"] = self.find_file_url(soup)
 
         # If two elements that are typical of photos are found, add that to problems
         # Example: http://commons.wikimedia.org/wiki/File:Louvre-Lens_-_Galerie_du_Temps_(2013)_-_203_-_RF_129_(E)_(Freddy_Driel).JPG
@@ -348,6 +329,47 @@ class FetchPainting(threading.Thread):
         metadata["metadata_dump"] = entire_text
 
         return (metadata, problems)
+
+    def find_file_url(self, soup, problems):
+        original_elem = soup.select(".fileInfo").string
+        original_size_regex = re.compile(r"\((.+) pixels")
+        original_size_results = original_size_regex.search(original_elem)
+        if not original_size_results:
+            problems.append("missing file URL")
+            return ("", problems)
+        
+        original_size_string = original_size_results.group(1)
+        split = original_size_string.split(" ")
+        if len(split) != 3:
+            problems.append("couldn't parse original file size")
+            return ("", problems)
+
+        width = split[0].replace(",", "")
+        height = split[2].replace(",", "")
+
+        # if image too small, exit
+        if width * height < MIN_IMAGE_AREA:
+            problem.append("file too small")
+            return ("", problems)
+        
+        # if image is the right size, find URL and return
+        if width * height < MAX_IMAGE_AREA:
+            file_url_regex = re.compile(r'Original file')
+            file_url_navigable_string = soup.find(text= file_url_regex)
+            if file_url_navigable_string != None:
+                file_url = file_url_navigable_string.parent["href"]
+            else:
+                file_url_elem = soup.select(".fullMedia a")
+                if len(file_url_elem) == 0:
+                    problems.append("missing file URL")
+                else:
+                    file_url = file_url_elem[0]["href"]
+
+            file_url = self.fix_file_url(file_url)
+            return (file_url, problems)
+
+        problems.append("file too large")
+        return ("", problems)
 
     # Used to fetch date, title, dimensions, medium
     def readMetaDataField(self, sibling_field_id, soup):
@@ -382,19 +404,8 @@ class FetchPainting(threading.Thread):
         return url
 
     # See how big image is
-    def file_size_okay(self, file_url):
-        # If user doesn't care, don't check
-        if not LIMIT_FILE_SIZE:
-            return True
-
-        try:
-            file_site = urllib2.urlopen(file_url)
-        except:
-            return True
-        file_size_headers = file_site.info().getheaders("Content-Length")
-        file_size_header = file_size_headers[0] if len(file_size_headers) > 0 else "0"
-        file_size = int(file_size_header) if file_size_header.isdigit() else 0
-        return (file_size <= MAX_FILE_SIZE and file_size >= MIN_FILE_SIZE)
+    def file_size_okay(self, metadata):
+        if metadata[g
 
     def generate_csv(self, metadata, fields):
         string = ""
@@ -462,7 +473,9 @@ class FetchPainting(threading.Thread):
                         problems_are_okay = False
                         break
 
-                if not problems_are_okay:
+                # if strictness is "permissive" all problems are ignored.
+                # easier that way.
+                if not problems_are_okay and strictness != "pemissive":
                     self.painting_counter_lock.acquire()
                     self.painting_counters[1] += 1
                     self.painting_counter_lock.release()
@@ -479,13 +492,10 @@ class FetchPainting(threading.Thread):
                         self.rejected_lock.release()
 
                         if download_images and file_url:
-                            if self.file_size_okay(file_url):
-                                try:
-                                    urllib.urlretrieve(file_url, "failed_images/" + file_name)
-                                except:
-                                    print "Unable to download %s" % (file_url)
-                            else:
-                                print "Exiting because file too large or small at %s" % (file_url)
+                            try:
+                                urllib.urlretrieve(file_url, "failed_images/" + file_name)
+                            except:
+                                print "Unable to download %s" % (file_url)
 
 
                     self.painting_url_queue.task_done()
@@ -501,14 +511,11 @@ class FetchPainting(threading.Thread):
 
             # If user wants to download images, do so
             if download_images:
-                if self.file_size_okay(file_url):
-                    try:
-                        # Write image file to images/ directory
-                        urllib.urlretrieve(file_url, "images/" + file_name)
-                    except:
-                        print "Unable to download %s" % (file_url)
-                else:
-                    print "Exiting because file too large or small at %s" % (file_url)
+                try:
+                    # Write image file to images/ directory
+                    urllib.urlretrieve(file_url, "images/" + file_name)
+                except:
+                    print "Unable to download %s" % (file_url)
 
             # Lock needed to prevent mess when multiple threads are writing
             # If lock is locked, will wait until released
