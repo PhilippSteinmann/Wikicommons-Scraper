@@ -127,7 +127,7 @@ class FetchArtist(threading.Thread):
         string = ""
         for work in works:
             for field in FIELDS:
-                string += work[field].replace("\n","") + SEPARATOR
+                string += " ".join(work[field].replace("\n","").split()) + SEPARATOR
 
             string = string[:-len(SEPARATOR)]
             string += "\n"
