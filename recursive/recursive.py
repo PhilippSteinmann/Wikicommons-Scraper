@@ -51,7 +51,7 @@ if len(sys.argv) >= 3:
     elif sys.argv[2] == "nodownload":
         download_images = False
     else:
-        print "USAGE: python main.py <URL> <download/nodownload> <restrictive/permissive>"
+        print "USAGE: python main.py <URL> <download/nodownload> <strict/permissive>"
         sys.exit()
 
 strictness = "permissive"
@@ -66,6 +66,9 @@ if strictness == "strict":
     problems_that_are_okay = ["taken with camera", "missing description"]
 else:
     problems_that_are_okay = ["taken with camera", "missing artwork table", "missing artist", "empty artist", "missing artist wikipedia link", "missing date", "missing description", "missing title", "missing medium", "missing dimensions", "missing current location", "too recent", "detail of painting", "missing file URL"]
+
+# This causes all metadata fields to be added to CSV, just as a precuation
+METADATA_DUMP = True
 
 # The order of fields that the CSV will be written in
 csv_fields_successful = ["problems", "artist", "artist_normalized", "title", "date", "description", "medium", "dimensions", "current_location", "object_type", "accession_number", "categories", "file_name", "file_url", "description_url", "metadata_dump"]
@@ -335,15 +338,31 @@ class FetchPainting(threading.Thread):
             metadata["categories"] = ""
 
 
-        content_element = soup.select("#content")[0]
-        entire_text = ''.join(content_element.findAll(text=True))
+        metadata["metadata_dump"] = self.get_metadata_dump(soup)
+
+        return (metadata, problems)
+
+    def get_metadata_dump(self, soup):
+        if not METADATA_DUMP:
+            return False
+
+        entire_text = ""
+        metadata_rows = soup.select(".fileinfotpl-type-information tr")
+        for row in metadata_rows:
+            columns = row.findAll("td")
+            if len(columns) != 2:
+                continue
+            column_one = columns[0]
+            column_one = ''.join(column_one.findAll(text=True))
+            column_two = columns[1]
+            column_two = ''.join(column_two.findAll(text=True))
+            entire_text += column_one + ":" + column_two + "~"
+
         entire_text = entire_text.replace("\n\n\n", " ")
         entire_text = entire_text.replace("\n\n", " ")
         entire_text = entire_text.replace("\n", " ")
         entire_text = entire_text.replace("\t", " ")
-        metadata["metadata_dump"] = entire_text
-
-        return (metadata, problems)
+        return entire_text
 
     def find_file_url(self, soup, problems):
         # look for element containing file size of largest file
