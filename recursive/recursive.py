@@ -303,7 +303,7 @@ class FetchPainting(threading.Thread):
         if metadata["title"] and "detail" in metadata["title"]:
             problems.append("detail of painting")
 
-        metadata["file_url"] = self.find_file_url(soup)
+        metadata["file_url"], problems = self.find_file_url(soup, problems)
 
         # If two elements that are typical of photos are found, add that to problems
         # Example: http://commons.wikimedia.org/wiki/File:Louvre-Lens_-_Galerie_du_Temps_(2013)_-_203_-_RF_129_(E)_(Freddy_Driel).JPG
@@ -331,31 +331,40 @@ class FetchPainting(threading.Thread):
         return (metadata, problems)
 
     def find_file_url(self, soup, problems):
-        original_elem = soup.select(".fileInfo").string
+        # look for element containing file size of largest file
+        original_elem = soup.select(".fileInfo")
+        if len(original_elem) != 1:
+            problems.append("couldn't find original file size")
+            return (False, problems)
+
+        original_size_string = ''.join(original_elem[0].findAll(text=True))
+            
         original_size_regex = re.compile(r"\((.+) pixels")
-        original_size_results = original_size_regex.search(original_elem)
+        original_size_results = original_size_regex.search(original_size_string)
+
+        # if not found, exit
         if not original_size_results:
             problems.append("missing file URL")
-            return ("", problems)
+            return (False, problems)
         
         original_size_string = original_size_results.group(1)
         split = original_size_string.split(" ")
         if len(split) != 3:
             problems.append("couldn't parse original file size")
-            return ("", problems)
+            return (False, problems)
 
-        width = split[0].replace(",", "")
-        height = split[2].replace(",", "")
+        width = int(split[0].replace(",", ""))
+        height = int(split[2].replace(",", ""))
 
         # if image too small, exit
         if width * height < MIN_IMAGE_AREA:
             problem.append("file too small")
-            return ("", problems)
+            return (False, problems)
         
-        # if image is the right size, find URL and return
+        # if image is the right size, find URL in page and return
         if width * height < MAX_IMAGE_AREA:
             file_url_regex = re.compile(r'Original file')
-            file_url_navigable_string = soup.find(text= file_url_regex)
+            file_url_navigable_string = soup.find(text=file_url_regex)
             if file_url_navigable_string != None:
                 file_url = file_url_navigable_string.parent["href"]
             else:
@@ -368,8 +377,31 @@ class FetchPainting(threading.Thread):
             file_url = self.fix_file_url(file_url)
             return (file_url, problems)
 
-        problems.append("file too large")
-        return ("", problems)
+        # if largest image is too large, look for smaller image
+        other_file_links = soup.select(".mw-thumbnail-link")
+        if len(other_file_links) == 0:
+            problems.append("could not find smaller files")
+            return (False, problems)
+
+        biggest_file = None
+        biggest_area = 0
+        for link in other_file_links:
+            contents = link.string
+            split = contents.split(" ")
+            width = int(split[0].replace(",", ""))
+            height = int(split[2].replace(",", ""))
+            area = width * height
+            if area > MIN_IMAGE_AREA and area < MAX_IMAGE_AREA and area > biggest_area:
+                biggest_area = area
+                biggest_file = link
+
+        if not biggest_file:
+            problems.append("could not find adequate file")
+            return (False, problems)
+        
+        biggest_link = biggest_file["href"]
+        biggest_link = self.fix_file_url(biggest_link)
+        return (biggest_link, problems)
 
     # Used to fetch date, title, dimensions, medium
     def readMetaDataField(self, sibling_field_id, soup):
@@ -402,10 +434,6 @@ class FetchPainting(threading.Thread):
         if url[0:2] == "//":
             url = "http:" + url
         return url
-
-    # See how big image is
-    def file_size_okay(self, metadata):
-        if metadata[g
 
     def generate_csv(self, metadata, fields):
         string = ""
@@ -475,7 +503,7 @@ class FetchPainting(threading.Thread):
 
                 # if strictness is "permissive" all problems are ignored.
                 # easier that way.
-                if not problems_are_okay and strictness != "pemissive":
+                if not problems_are_okay and strictness != "permissive":
                     self.painting_counter_lock.acquire()
                     self.painting_counters[1] += 1
                     self.painting_counter_lock.release()
