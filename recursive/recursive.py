@@ -192,6 +192,9 @@ class FetchPainting(threading.Thread):
         self.problems_that_are_okay = problems_that_are_okay
 
     def normalized(self, artist):
+        if not artist:
+            return artist
+
         artist = artist.lower()
         artist = artist.replace("-", "")
 
