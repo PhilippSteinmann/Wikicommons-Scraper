@@ -202,12 +202,20 @@ def fetch_titles(artist_queue):
 
     write_header(file_obj)
 
+    threads = []
     for i in range(NUM_THREADS):
         new_thread = FetchArtist(artist_queue, file_obj, write_lock)
         new_thread.setDaemon(True)
         new_thread.start()
+        threads.append(new_thread)
     
-    artist_queue.join()
+    try:
+        while sum([i.isAlive() for i in threads]):
+            pass
+    except KeyboardInterrupt:
+        print "Terminating..."
+        exit()
+
     file_obj.close()
 
 def main():
