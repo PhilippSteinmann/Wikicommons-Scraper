@@ -7,7 +7,7 @@ import json
 import sys
 import httplib
 
-NUM_THREADS = 30
+NUM_THREADS = 1
 INPUT_FILE = "../data/artist_list.csv"
 OUTPUT_FILE = "../data/title_list.csv"
 XAPP_TOKEN = "JvTPWe4WsQO-xqX6Bts49nTqNSFJt70Gq74yNrstrihK_lL53aaVs3fbWRlnTA9evHsoYynWPz5in2MY5IBhuoxaqXlxh_cDV8ThHwxDBILY9RjROQUQK0KoMksobvaJorW9WvBRcZb6L8Tal96Ue-WvbQJ367lnLA77uQ1f82xCp-g8XkZ2felvikCzcM4vCmmQtz713z56YRFNMTpr4F8ihrDR6eS-mpdeov53N9w="
@@ -209,13 +209,14 @@ def fetch_titles(artist_queue):
         new_thread.start()
         threads.append(new_thread)
     
-    try:
-        while sum([i.isAlive() for i in threads]):
-            pass
-    except KeyboardInterrupt:
-        print "Terminating..."
-        exit()
+#    try:
+#        while sum([i.isAlive() for i in threads]):
+#            pass
+#    except KeyboardInterrupt:
+#        print "Terminating..."
+#        exit()
 
+    artist_queue.join()
     file_obj.close()
 
 def main():
@@ -224,4 +225,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
