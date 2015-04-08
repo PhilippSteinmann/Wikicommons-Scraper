@@ -478,11 +478,11 @@ class FetchPainting(threading.Thread):
             
             value = metadata[field]
 
-            # If separator is found in field value, replace with spaces
-            value = value.replace(SEPARATOR, " " * len(SEPARATOR))
+            # If separator is found in field value, replace with "not sign"
+            value = value.replace(SEPARATOR, "¬" * len(SEPARATOR))
             string += SEPARATOR + value
 
-        string = string[len(SEPARATOR):]
+        string = string[len(SEPARATOR):].replace("\n","")
         string += "\n"
         return string
 
