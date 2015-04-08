@@ -61,10 +61,14 @@ class FetchArtist(threading.Thread):
                 print e
                 response = urllib2.urlopen(request)
             except Exception as e:
-                # Give up
-                print e
-                print "FAILED URL: " + url
-                return None
+            # Try once more
+                try:
+                    response = urllib2.urlopen(request)
+                except Exception as e:
+                    # Give up
+                    print e
+                    print "FAILED URL: " + url
+                    return None
 
         return response.read()
 
