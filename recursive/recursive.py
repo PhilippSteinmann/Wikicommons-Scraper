@@ -74,7 +74,7 @@ METADATA_DUMP = True
 csv_fields_successful = ["problems", "artist", "artist_normalized", "title", "date", "description", "medium", "dimensions", "current_location", "object_type", "accession_number", "categories", "file_name", "file_url", "description_url", "metadata_dump"]
 csv_fields_rejected = ["problems", "artist", "artist_normalized", "title", "date", "description", "medium", "dimensions", "current_location", "object_type", "accession_number", "categories", "file_name", "file_url", "description_url", "metadata_dump"]
 
-category_blacklist = []
+category_blacklist = ["Tile sets of gigapixel images from the Google Art Project", "Details of paintings from Google Art Project"]
 
 # This is the first of two types of threads found in this program
 # It takes a category_url from category_url_queue, fetches the HTML,
@@ -478,11 +478,11 @@ class FetchPainting(threading.Thread):
             
             value = metadata[field]
 
-            # If separator is found in field value, replace with spaces
-            value = value.replace(SEPARATOR, " " * len(SEPARATOR))
+            # If separator is found in field value, replace with "not sign"
+            value = value.replace(SEPARATOR, "¬" * len(SEPARATOR))
             string += SEPARATOR + value
 
-        string = string[len(SEPARATOR):]
+        string = string[len(SEPARATOR):].replace("\n","")
         string += "\n"
         return string
 
