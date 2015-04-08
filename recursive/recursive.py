@@ -699,8 +699,8 @@ def main():
     category_url_queue.join()
     painting_url_queue.join()
 
-    successful_file.close()
-    rejected_file.close() 
+    file_successful.close()
+    file_rejected.close() 
 
 if __name__ == "__main__":
     main()
