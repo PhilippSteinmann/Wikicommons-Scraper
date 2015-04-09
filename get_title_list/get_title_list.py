@@ -7,7 +7,7 @@ import json
 import sys
 import httplib
 
-NUM_THREADS = 1
+NUM_THREADS = 30
 INPUT_FILE = "../data/artist_list.csv"
 OUTPUT_FILE = "../data/title_list.csv"
 XAPP_TOKEN = "JvTPWe4WsQO-xqX6Bts49nTqNSFJt70Gq74yNrstrihK_lL53aaVs3fbWRlnTA9evHsoYynWPz5in2MY5IBhuoxaqXlxh_cDV8ThHwxDBILY9RjROQUQK0KoMksobvaJorW9WvBRcZb6L8Tal96Ue-WvbQJ367lnLA77uQ1f82xCp-g8XkZ2felvikCzcM4vCmmQtz713z56YRFNMTpr4F8ihrDR6eS-mpdeov53N9w="
