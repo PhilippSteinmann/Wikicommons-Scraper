@@ -63,7 +63,7 @@ if len(sys.argv) >= 4:
         sys.exit()
 
 if strictness == "strict":
-    problems_that_are_okay = ["taken with camera", "missing description"]
+    problems_that_are_okay = ["taken with camera", "missing description", "file too small"]
 else:
     problems_that_are_okay = ["taken with camera", "missing artwork table", "missing artist", "empty artist", "missing artist wikipedia link", "missing date", "missing description", "missing title", "missing medium", "missing dimensions", "missing current location", "too recent", "detail of painting", "missing file URL"]
 
@@ -392,7 +392,7 @@ class FetchPainting(threading.Thread):
 
         # if image too small, exit
         if width * height < MIN_IMAGE_AREA:
-            problem.append("file too small")
+            problems.append("file too small")
             return (False, problems)
         
         # if image is the right size, find URL in page and return

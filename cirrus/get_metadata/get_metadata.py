@@ -10,7 +10,7 @@ from bs4 import BeautifulSoup
 
 import recursive
 
-NUM_THREADS = 30
+NUM_THREADS = 40
 INPUT_FILE = "../get_search/search_results.csv"
 OUTPUT_FILE = "metadata.csv"
 
