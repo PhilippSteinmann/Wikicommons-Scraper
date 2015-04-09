@@ -3,7 +3,7 @@ import threading
 import urllib2
 from bs4 import BeautifulSoup
 
-NUM_THREADS = 30
+NUM_THREADS = 50
 OUTPUT_URL = "../data/artist_list.csv"
 SEPARATOR = "%"
 
@@ -151,6 +151,9 @@ def get_artists(all_pages):
     return artists
 
 def write_artists_to_file(artists):
+    # To make progress more easy to see in get_title_list
+    artists.sort()
+
     file_obj = open(OUTPUT_URL, "w+")
 
     header = "name,url\n"
