@@ -104,7 +104,7 @@ def fetch_metadata(urls_queue):
         painting_thread.setDaemon(True)
         painting_thread.start()
 
-        urls_queue.join()
+    urls_queue.join()
 
 
 def main():
